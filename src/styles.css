@@ -117,90 +117,126 @@ input[type="text"], input:not([type]), select, .song-actions input, .load-row se
 .legend span[data-code="4"] { color: #8a5a00; }
 .legend span[data-code="3"] { color: #8f2d2d; }
 
-.slot-row {
+.line {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: stretch;
+  align-items: flex-start;
+  gap: 0.15rem 0.05rem;
+  padding: 0.35rem 0.1rem 0.2rem;
+  user-select: none;
 }
 
-.bar-break {
-  width: 0;
-  border-left: 2px solid #d9cbb8;
-  margin: 0 0.15rem;
+.phrase-break {
+  align-self: center;
+  color: #c4b5a3;
+  padding: 0.85rem 0.2rem 0;
+  font-size: 0.95rem;
 }
 
-.slot {
-  width: 7.2rem;
-  background: #fff;
-  border: 1px solid #e3d5c3;
-  border-radius: 12px;
-  padding: 0.4rem 0.45rem 0.5rem;
-  display: flex;
+.syllable {
+  display: inline-flex;
   flex-direction: column;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 0.05rem;
+  min-width: 1.7rem;
+  padding: 0.1rem 0.12rem 0.2rem;
+  border-radius: 8px;
 }
 
-.slot.is-selected { outline: 2px solid #1d4e89; }
-.slot.is-bad { background: #fde8e8; border-color: #e7b4b4; }
-.slot.is-unknown { background: #fff6df; border-color: #ead7a1; }
-.slot.is-melisma { background: #f6f1ea; }
+.syllable.is-selected { background: #e4eef8; }
+.syllable.is-bad .char { color: #9f1239; box-shadow: inset 0 -2px 0 #e7b4b4; }
+.syllable.is-unknown .char { box-shadow: inset 0 -2px 0 #ead7a1; }
+.syllable.is-melisma { color: #8a7b6a; }
 
-.slot-pitch {
-  display: flex;
-  justify-content: space-between;
-  color: #6d6256;
-  font-size: 0.8rem;
+.pitch {
+  color: #8a7b6a;
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+.code-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.05rem;
+  min-height: 1rem;
 }
 
 .code {
-  font-size: 1.6rem;
+  appearance: none;
+  border: 0;
+  background: transparent;
   font-weight: 750;
+  font-size: 0.78rem;
+  line-height: 1;
+  width: 1.15rem;
+  padding: 0;
+  text-align: center;
+  cursor: pointer;
+}
+.syllable[data-code="0"] .code { color: #1d4e89; }
+.syllable[data-code="2"] .code { color: #0f6e6e; }
+.syllable[data-code="4"] .code { color: #8a5a00; }
+.syllable[data-code="3"] .code { color: #8f2d2d; }
+.syllable.is-override .code {
+  text-decoration: underline dashed;
+  text-underline-offset: 2px;
+}
+
+.edit-mark {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #8a5a00;
   line-height: 1;
 }
-.slot[data-code="0"] .code { color: #1d4e89; }
-.slot[data-code="2"] .code { color: #0f6e6e; }
-.slot[data-code="4"] .code { color: #8a5a00; }
-.slot[data-code="3"] .code { color: #8f2d2d; }
 
-.source, .char {
-  width: 100%;
-  border: 1px solid #e3d5c3;
-  border-radius: 8px;
-  padding: 0.2rem 0.35rem;
-  background: #fff;
+.glyph, .char, .source {
+  width: 1.55rem;
+  text-align: center;
+}
+
+.char, .source {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: inset 0 -1px 0 #eadfD2;
 }
 
 .char {
-  font-size: 1.35rem;
-  text-align: center;
-  padding: 0.15rem;
+  font-size: 1.45rem;
+  line-height: 1.15;
+  height: 1.7rem;
 }
 
 .char.bad { color: #9f1239; }
 
-.source.melisma, .melisma-mark {
-  text-align: center;
+.source {
+  font-size: 0.68rem;
   color: #8a7b6a;
+  height: 0.95rem;
+  box-shadow: none;
 }
+.source::placeholder { color: #d9cbb8; }
+
+.glyph.melisma { color: #8a7b6a; font-size: 1.2rem; line-height: 1.7rem; }
 
 .flag {
-  margin: 0;
   color: #9f1239;
-  font-size: 0.75rem;
+  font-size: 0.62rem;
   font-weight: 700;
+  line-height: 1;
 }
 .flag.unknown { color: #8a5a12; }
 
-.readings { display: flex; flex-direction: column; gap: 0.2rem; }
+.readings { display: flex; flex-direction: column; gap: 0.15rem; }
 
 .reading, .linkish {
   background: transparent;
   color: #241c15;
   border: 1px solid #e3d5c3;
   border-radius: 8px;
-  padding: 0.1rem 0.3rem;
-  font-size: 0.72rem;
+  padding: 0.05rem 0.25rem;
+  font-size: 0.68rem;
   text-align: left;
 }
 

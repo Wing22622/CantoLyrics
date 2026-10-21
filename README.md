@@ -1,6 +1,6 @@
 # CantoLyrics
 
-A small browser app for writing Cantonese lyrics (填詞) against a melody. Paste 簡譜 or upload a MIDI file, see a 0243 tone code on every note, type Cantonese characters, and get word suggestions that fit the codes.
+A small browser app for writing Cantonese lyrics (填詞) against a melody. Paste 簡譜 or upload a MIDI file, see a 0243 tone code on every note, type Cantonese characters in one flowing line, and get word suggestions that fit the codes. Any code can be edited by hand.
 
 M1 is client-only. Vite builds a static site that can be hosted on Vercel. There is no backend and this repo does not deploy anything.
 
@@ -27,7 +27,15 @@ npm run dev
 
 MIDI: format 0 or 1. If the file has several tracks, pick one. A chord keeps the highest note. A later overlapping note trims the one before it.
 
-Rests have no code and no lyric slot. Each sung note is one slot.
+Rests have no code and no lyric slot. Each sung note is one syllable in the line.
+
+## Editor
+
+The lyric editor is one sentence, not a grid of cards. Syllables sit inline and wrap. A bar is a light `｜`. Each syllable shows the pitch, the 0243 code, the character you type, and the original syllable underneath. Click a syllable, shift-click, or drag across the line to select consecutive empty syllables for suggestions. 拖音 and extra readings show on the syllable you have selected.
+
+The code is a menu of 0, 2, 4, and 3. Changing it stores a hand edit, marked 改 with a dashed underline. Editing the 簡譜 re-parses the melody and keeps those edits on the same sung-note index, along with the characters already typed. A fresh import clears the edits: 載入例句, uploading a MIDI file, or switching MIDI track. 還原聲調碼 clears them too, and choosing the mapped code again clears that one syllable. Mismatch flags and the suggestion list use the code on screen, hand edit or mapped.
+
+Hand edits follow the sung-note index. Inserting a note at the front shifts which syllable they sit on, the same way typed characters do.
 
 ## 0243 rules
 
@@ -91,7 +99,8 @@ Songs are stored in `localStorage` under `cantolyrics.songs.v1`. Export writes a
 
 ## Known limitations
 
-- One scaffold per phrase. No 節點斷開, no alternate fillings, no 同向 slider. 外張 only shows up as a gap cost (0 and 3 can stretch, but they still pay for the semitones).
+- One scaffold per phrase. No 節點斷開, no alternate fillings, no 同向 slider. 外張 only shows up as a gap cost (0 and 3 can stretch, but they still pay for the semitones). Hand-editing a code is the way to force another filling.
+- Hand edits are stored per sung-note index. They survive 簡譜 edits and are dropped on a new melody import.
 - No 六聲 or 九聲.
 - 變調 is honoured only when the lexicon lists it as its own reading.
 - Rising tones may fit an extra code. That is more permissive than “陰上 = 三 only”.

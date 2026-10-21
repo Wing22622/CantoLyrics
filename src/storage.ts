@@ -1,18 +1,8 @@
-import type { Code0243 } from "./tone-0243";
+import { normalizeSlot, type LyricSlot } from "./slots";
 
 const KEY = "cantolyrics.songs.v1";
 
-export interface StoredSlot {
-  pitch: number;
-  beats: number;
-  label: string;
-  bar: number;
-  code: Code0243;
-  source: string;
-  melisma: boolean;
-  character: string;
-  reading: string | null;
-}
+export type StoredSlot = LyricSlot;
 
 export interface StoredSong {
   id: string;
@@ -28,7 +18,11 @@ function readAll(): StoredSong[] {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as StoredSong[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((song) => ({
+      ...song,
+      slots: Array.isArray(song.slots) ? song.slots.map((slot) => normalizeSlot(slot)) : [],
+    }));
   } catch {
     return [];
   }

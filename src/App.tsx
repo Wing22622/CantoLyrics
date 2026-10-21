@@ -8,41 +8,16 @@ import { parseJianpu } from "./jianpu";
 import { loadLexicon, type Lexicon } from "./lexicon";
 import { midiNoteName, parseMidi, type MidiTrack } from "./midi";
 import { splitSyllables } from "./syllables";
+import { clearOverrides, effectiveCode, slotsFromNotes, withCode, type IncomingNote } from "./slots";
 import { deleteSong, listSongs, saveSong, type StoredSong } from "./storage";
-import { mapMelody, type Code0243 } from "./tone-0243";
+import type { Code0243 } from "./tone-0243";
 import type { WordEntry } from "./suggest";
 
-interface DisplayNote {
-  rest: boolean;
-  pitch: number | null;
-  beats: number;
-  label: string;
-  bar: number;
+function toSlots(notes: IncomingNote[], prev: Slot[], keepOverrides: boolean): Slot[] {
+  return slotsFromNotes(notes, prev, keepOverrides);
 }
 
-function toSlots(notes: DisplayNote[], prev: Slot[]): Slot[] {
-  const codes = mapMelody(notes.map((note) => ({ pitch: note.rest ? null : note.pitch })));
-  const next: Slot[] = [];
-  notes.forEach((note, index) => {
-    const code = codes[index];
-    if (note.rest || code == null || note.pitch == null) return;
-    const old = prev[next.length];
-    next.push({
-      pitch: note.pitch,
-      beats: note.beats,
-      label: note.label,
-      bar: note.bar,
-      code,
-      source: old?.source ?? "",
-      melisma: old?.melisma ?? false,
-      character: old?.character ?? "",
-      reading: old?.reading ?? null,
-    });
-  });
-  return next;
-}
-
-function fromJianpu(text: string): { notes: DisplayNote[]; warnings: string[]; tonic: string } {
+function fromJianpu(text: string): { notes: IncomingNote[]; warnings: string[]; tonic: string } {
   const parsed = parseJianpu(text);
   return {
     tonic: parsed.tonicName,
@@ -57,7 +32,7 @@ function fromJianpu(text: string): { notes: DisplayNote[]; warnings: string[]; t
   };
 }
 
-function fromTrack(track: MidiTrack): DisplayNote[] {
+function fromTrack(track: MidiTrack): IncomingNote[] {
   return track.notes.map((note) => ({
     rest: false,
     pitch: note.pitch,
@@ -112,7 +87,7 @@ export function App() {
     const parsed = fromJianpu(text);
     setTonic(parsed.tonic);
     setWarnings(parsed.warnings);
-    setSlots((prev) => toSlots(parsed.notes, prev));
+    setSlots((prev) => toSlots(parsed.notes, prev, true));
     setSelection([]);
   }
 
@@ -138,7 +113,7 @@ export function App() {
     setTonic(parsed.tonic);
     setWarnings(parsed.warnings);
     const syllables = splitSyllables(EXAMPLE_LYRICS);
-    const base = toSlots(parsed.notes, []);
+    const base = toSlots(parsed.notes, [], false);
     const aligned = alignSources(base, syllables);
     setSlots(
       base.map((slot, index) => ({
@@ -160,7 +135,7 @@ export function App() {
       setTrackIndex(0);
       if (parsed.tracks.length > 0) {
         setMode("midi");
-        setSlots((prev) => toSlots(fromTrack(parsed.tracks[0]), prev));
+        setSlots((prev) => toSlots(fromTrack(parsed.tracks[0]), prev, false));
         setSelection([]);
       }
     } catch (error) {
@@ -171,7 +146,7 @@ export function App() {
   function chooseTrack(index: number) {
     setTrackIndex(index);
     setMode("midi");
-    setSlots((prev) => toSlots(fromTrack(tracks[index]), prev));
+    setSlots((prev) => toSlots(fromTrack(tracks[index]), prev, false));
     setSelection([]);
   }
 
@@ -210,6 +185,14 @@ export function App() {
       return next;
     });
     requestAnimationFrame(() => inputs.current[last + 1]?.focus());
+  }
+
+  function onCode(index: number, code: Code0243) {
+    setSlots((prev) => prev.map((slot, i) => (i === index ? withCode(slot, code) : slot)));
+  }
+
+  function onClearCodes() {
+    setSlots((prev) => clearOverrides(prev));
   }
 
   function onReading(index: number, jyutping: string) {
@@ -318,7 +301,8 @@ export function App() {
   }
 
   const run = emptyRun(slots, selection);
-  const suggestCodes: Code0243[] = run ? run.map((index) => slots[index].code) : [];
+  const suggestCodes: Code0243[] = run ? run.map((index) => effectiveCode(slots[index])) : [];
+  const handEdited = slots.some((slot) => slot.override != null);
 
   return (
     <div className={run ? "app split" : "app"}>
@@ -456,9 +440,15 @@ export function App() {
               <span data-code="4">4 次高</span>
               <span data-code="3">3 最高</span>
             </p>
+            <button type="button" onClick={onClearCodes} disabled={!handEdited}>
+              還原聲調碼
+            </button>
           </div>
+          <p className="hint">
+            一行歌詞，每個音一個字。撳個聲調碼可以改；改過會標「改」，再改簡譜都唔會覆寫。重新載入例句、上載 MIDI 或者撳「還原聲調碼」先至用返計算出嚟嘅碼。撳住拖或者按住 Shift 可以連選空格。
+          </p>
           {slots.length === 0 ? (
-            <p className="hint">未有旋律。貼上簡譜或者上載 MIDI 之後，呢度會出一排聲調格。</p>
+            <p className="hint">未有旋律。貼上簡譜或者上載 MIDI 之後，呢度會出一行歌詞。</p>
           ) : (
             <SlotRow
               slots={slots}
@@ -470,6 +460,7 @@ export function App() {
               onReading={onReading}
               onMelisma={onMelisma}
               onSource={onSource}
+              onCode={onCode}
               registerInput={(index, node) => {
                 inputs.current[index] = node;
               }}
