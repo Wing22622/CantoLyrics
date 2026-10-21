@@ -72,7 +72,7 @@ describe("parseMidi", () => {
       { delta: 0, data: [0x80, 67, 0] },
     ]);
     expect(parseMidi(file([chord])).tracks[0].notes).toEqual([
-      { pitch: 67, startBeat: 0, beats: 1 },
+      { pitch: 67, startBeat: 0, beats: 1, bar: 1 },
     ]);
 
     const legato = track([
@@ -127,6 +127,16 @@ describe("parseMidi", () => {
     expect(mapMelody(parsed.tracks[0].notes.map((item) => ({ pitch: item.pitch })))).toEqual([
       "0", "0", "0", "3", "4", "3", "4", "4", "2", "2",
     ]);
+    expect(parsed.tracks[0].notes.map((item) => item.bar)).toEqual([1, 1, 1, 1, 2, 2, 2, 2, 3, 3]);
+  });
+
+  it("reads a 5/4 time signature from a track that has no notes", () => {
+    const conductor = track([{ delta: 0, data: [0xff, 0x58, 0x04, 5, 2, 24, 8] }]);
+    const pitches = [64, 65, 67, 76, 72, 74, 72, 72, 71, 71];
+    const melody = track(pitches.flatMap((pitch) => note(0, pitch, 480)));
+    const parsed = parseMidi(file([conductor, melody]));
+    expect(parsed.tracks).toHaveLength(1);
+    expect(parsed.tracks[0].notes.map((item) => item.bar)).toEqual([1, 1, 1, 1, 1, 2, 2, 2, 2, 2]);
   });
 
   it("throws a readable error on a buffer that is not MIDI", () => {

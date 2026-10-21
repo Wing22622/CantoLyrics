@@ -104,7 +104,7 @@ Songs are stored in `localStorage` under `cantolyrics.songs.v1`. Export writes a
 - No 六聲 or 九聲.
 - 變調 is honoured only when the lexicon lists it as its own reading.
 - Rising tones may fit an extra code. That is more permissive than “陰上 = 三 only”.
-- MIDI chords keep the top note. Bars are assumed to be 4 beats. No time-signature meta.
+- MIDI chords keep the top note. Bars follow a time-signature event, including one on a track with no notes. With no time signature, a bar is 4 beats.
 - 簡譜 subset: no triplets, grace notes, or ties beyond `-`.
 - English syllabification is a vowel-group split, not a dictionary. Japanese kanji are one character each, not split into morae. Punctuation is dropped.
 - The lexicon is not exhaustive. Simplified characters are not covered. An unknown character is amber, not a tone error.

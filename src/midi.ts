@@ -9,6 +9,8 @@ export interface MidiNote {
   /** Quarter lengths from the start of the track. */
   startBeat: number;
   beats: number;
+  /** 1-based bar from the file's time signature. With none, a bar is 4 beats. */
+  bar: number;
 }
 
 export interface MidiTrack {
@@ -67,13 +69,47 @@ function monophonic(notes: RawNote[]): RawNote[] {
   return out;
 }
 
-function parseTrack(data: Uint8Array, offset: number, length: number, ppq: number): MidiTrack {
+interface TimeSignature {
+  tick: number;
+  /** Length of one bar in MIDI ticks. */
+  barTicks: number;
+}
+
+interface ParsedTrack {
+  name: string;
+  notes: RawNote[];
+  signatures: TimeSignature[];
+}
+
+/** Numerator over 2^dd. 4/4 is 4 beats; 5/4 is 5; 6/8 is 3 quarter-lengths. */
+function barTicksFor(numerator: number, denominatorPower: number, ppq: number): number | null {
+  if (numerator < 1 || denominatorPower < 0 || denominatorPower > 10) return null;
+  const ticks = (numerator * ppq * 4) / 2 ** denominatorPower;
+  return ticks > 0 ? ticks : null;
+}
+
+function barAt(tick: number, signatures: readonly TimeSignature[], ppq: number): number {
+  const points = signatures.filter((signature) => signature.barTicks > 0).sort((a, b) => a.tick - b.tick);
+  if (points.length === 0 || points[0].tick > 0) points.unshift({ tick: 0, barTicks: 4 * ppq });
+  let bar = 1;
+  for (let index = 0; index < points.length; index++) {
+    const start = points[index].tick;
+    const end = index + 1 < points.length ? points[index + 1].tick : Number.POSITIVE_INFINITY;
+    const size = points[index].barTicks;
+    if (tick < end) return bar + Math.floor((tick - start) / size);
+    bar += Math.floor((end - start) / size);
+  }
+  return bar;
+}
+
+function parseTrack(data: Uint8Array, offset: number, length: number, ppq: number): ParsedTrack {
   const end = offset + length;
   let time = 0;
   let running: number | null = null;
   let name = "";
   const open = new Map<number, number[]>();
   const raw: RawNote[] = [];
+  const signatures: TimeSignature[] = [];
 
   const close = (pitch: number, when: number) => {
     const stack = open.get(pitch);
@@ -102,6 +138,10 @@ function parseTrack(data: Uint8Array, offset: number, length: number, ppq: numbe
       const len = readVarLen(data, offset);
       offset = len.offset;
       if (type === 0x03) name = decodeName(data, offset, len.value);
+      if (type === 0x58 && len.value >= 2) {
+        const ticks = barTicksFor(data[offset], data[offset + 1], ppq);
+        if (ticks != null) signatures.push({ tick: time, barTicks: ticks });
+      }
       if (type === 0x2f) {
         offset += len.value;
         break;
@@ -135,12 +175,7 @@ function parseTrack(data: Uint8Array, offset: number, length: number, ppq: numbe
     }
   }
 
-  const notes = monophonic(raw).map((note) => ({
-    pitch: note.pitch,
-    startBeat: note.start / ppq,
-    beats: (note.end - note.start) / ppq,
-  }));
-  return { name, notes };
+  return { name, notes: monophonic(raw), signatures };
 }
 
 function decodeName(data: Uint8Array, offset: number, length: number): string {
@@ -166,7 +201,8 @@ export function parseMidi(input: Uint8Array | ArrayBuffer): MidiParse {
   if (format > 1) throw new MidiError("未支援呢種 MIDI 格式");
   const ppq = division || 480;
   const warnings: string[] = [];
-  const tracks: MidiTrack[] = [];
+  const parsedTracks: ParsedTrack[] = [];
+  const signatures: TimeSignature[] = [];
   let offset = 8 + headerLength;
   for (let i = 0; i < trackCount; i++) {
     if (offset + 8 > data.length) {
@@ -180,12 +216,19 @@ export function parseMidi(input: Uint8Array | ArrayBuffer): MidiParse {
     const length = view.getUint32(offset + 4);
     const track = parseTrack(data, offset + 8, length, ppq);
     offset += 8 + length;
+    signatures.push(...track.signatures);
     if (track.notes.length === 0) continue;
-    tracks.push({
-      name: track.name || `音軌 ${tracks.length + 1}`,
-      notes: track.notes,
-    });
+    parsedTracks.push(track);
   }
+  const tracks: MidiTrack[] = parsedTracks.map((track, index) => ({
+    name: track.name || `音軌 ${index + 1}`,
+    notes: track.notes.map((note) => ({
+      pitch: note.pitch,
+      startBeat: note.start / ppq,
+      beats: (note.end - note.start) / ppq,
+      bar: barAt(note.start, signatures, ppq),
+    })),
+  }));
   if (tracks.length === 0) warnings.push("檔案入面冇旋律音");
   return { ppq, tracks, warnings };
 }

@@ -38,7 +38,7 @@ function fromTrack(track: MidiTrack): IncomingNote[] {
     pitch: note.pitch,
     beats: note.beats,
     label: midiNoteName(note.pitch),
-    bar: Math.floor(note.startBeat / 4) + 1,
+    bar: note.bar,
   }));
 }
 
