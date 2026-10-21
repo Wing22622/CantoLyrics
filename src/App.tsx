@@ -434,6 +434,7 @@ export function App() {
         <section className="panel">
           <div className="panel-head">
             <h2>填詞</h2>
+            <p className="hint">{slots.length} 個音</p>
             <p className="legend">
               <span data-code="0">0 最低</span>
               <span data-code="2">2 次低</span>
