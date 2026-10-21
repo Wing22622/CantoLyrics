@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { alignSources, toggleMelisma } from "./align";
+import { alignSources, alignmentNote, toggleMelisma } from "./align";
 import { SuggestPanel } from "./components/SuggestPanel";
 import { SlotRow, type Slot } from "./components/SlotRow";
 import { EXAMPLE_JIANPU, EXAMPLE_LYRICS, EXAMPLE_TITLE } from "./example";
@@ -126,11 +126,7 @@ export function App() {
         melisma: false,
       }));
     });
-    setNote(
-      syllables.length === slots.length
-        ? ""
-        : `音節 ${syllables.length} 個，音符 ${slots.length} 個。多出嚟嘅音節會被擱低，未有音節嘅格會空住。`,
-    );
+    setNote(alignmentNote(syllables.length, slots.length));
   }
 
   function loadExample() {

@@ -23,6 +23,8 @@ describe("checkFit", () => {
     }
     const wrong = checkFit("常", "3", [{ jyutping: "soeng4", tone: 4 }], null);
     expect(wrong.status).toBe("mismatch");
+    const fixed = checkFit("歡", "3", [{ jyutping: "fun1", tone: 1 }], null);
+    expect(fixed.status).toBe("fit");
   });
 
   it("lets 裏 leoi5 fill both 4 and 2, and shows that", () => {

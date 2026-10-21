@@ -3,6 +3,12 @@ export interface AlignSlot {
   melisma: boolean;
 }
 
+/** Shown when the source syllable count and the sung-note count differ. */
+export function alignmentNote(syllableCount: number, noteCount: number): string {
+  if (syllableCount === noteCount) return "";
+  return `音節 ${syllableCount} 個，音符 ${noteCount} 個。多出嚟嘅音節會被擱低，未有音節嘅格會空住。`;
+}
+
 /** One syllable per slot, in order. Clears melisma. Extra syllables are dropped. */
 export function alignSources(slots: readonly AlignSlot[], syllables: readonly string[]): AlignSlot[] {
   return slots.map((_, index) => ({

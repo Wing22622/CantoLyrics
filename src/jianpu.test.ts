@@ -38,6 +38,21 @@ describe("parseJianpu", () => {
     expect(warnings).toEqual(["唔識呢個符號：foo"]);
   });
 
+  it("maps octave marks, a rest, and a tie onto the 世界真細小 codes", () => {
+    const { notes, warnings } = parseJianpu("3 4 5 3' 1' - | 0 | 2' 1' 1' 7 7_");
+    expect(warnings).toEqual([]);
+    expect(notes.map((note) => note.pitch)).toEqual([
+      64, 65, 67, 76, 72, null, 74, 72, 72, 71, 71,
+    ]);
+    expect(notes.map((note) => note.beats)).toEqual([1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 0.5]);
+    expect(notes.map((note) => note.label)).toEqual([
+      "3", "4", "5", "3'", "1'", "0", "2'", "1'", "1'", "7", "7",
+    ]);
+    expect(mapMelody(notes.map((note) => ({ pitch: note.pitch })))).toEqual([
+      "0", "0", "0", "3", "4", null, "3", "4", "4", "2", "2",
+    ]);
+  });
+
   it("feeds the 世界真細小 opening into the 0243 mapper", () => {
     const { notes } = parseJianpu("3 4 5 3' 1' | 2' 1' 1' 7 7");
     const codes = mapMelody(notes.map((note) => ({ pitch: note.pitch })));

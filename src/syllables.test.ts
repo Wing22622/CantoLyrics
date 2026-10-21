@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alignSources, toggleMelisma } from "./align";
+import { alignSources, alignmentNote, toggleMelisma } from "./align";
 import { splitSyllables } from "./syllables";
 
 describe("splitSyllables", () => {
@@ -29,5 +29,20 @@ describe("alignSources", () => {
     const merged = toggleMelisma(slots, 2);
     expect(merged.map((slot) => slot.melisma)).toEqual([false, false, true, false, false]);
     expect(merged.map((slot) => slot.source)).toEqual(["人", "人", "", "常", "歡"]);
+  });
+
+  it("drops extra syllables, leaves a short line blank, and says so", () => {
+    const slots = Array.from({ length: 4 }, () => ({ source: "舊", melisma: true }));
+    expect(alignSources(slots, ["人", "人", "常", "歡", "笑"]).map((slot) => slot.source)).toEqual([
+      "人", "人", "常", "歡",
+    ]);
+    expect(alignSources(slots, ["hel", "lo"]).map((slot) => slot.source)).toEqual(["hel", "lo", "", ""]);
+    expect(alignmentNote(3, 10)).toBe(
+      "音節 3 個，音符 10 個。多出嚟嘅音節會被擱低，未有音節嘅格會空住。",
+    );
+    expect(alignmentNote(12, 10)).toBe(
+      "音節 12 個，音符 10 個。多出嚟嘅音節會被擱低，未有音節嘅格會空住。",
+    );
+    expect(alignmentNote(10, 10)).toBe("");
   });
 });

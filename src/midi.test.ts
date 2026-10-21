@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { midiNoteName, parseMidi } from "./midi";
+import { MidiError, midiNoteName, parseMidi } from "./midi";
+import { mapMelody } from "./tone-0243";
 
 function varLen(value: number): number[] {
   const bytes = [value & 0x7f];
@@ -115,5 +116,48 @@ describe("parseMidi", () => {
     const parsed = parseMidi(file([body]));
     expect(parsed.tracks[0].notes.map((item) => item.pitch)).toEqual([60, 62]);
     expect(parsed.tracks[0].notes[1].beats).toBe(0.5);
+  });
+
+  it("maps the 世界真細小 pitches, including the octave leap, to 0033434422", () => {
+    const pitches = [64, 65, 67, 76, 72, 74, 72, 72, 71, 71];
+    const events = pitches.flatMap((pitch) => note(0, pitch, 480));
+    const parsed = parseMidi(file([track(events)]));
+    expect(parsed.warnings).toEqual([]);
+    expect(parsed.tracks[0].notes.map((item) => item.pitch)).toEqual(pitches);
+    expect(mapMelody(parsed.tracks[0].notes.map((item) => ({ pitch: item.pitch })))).toEqual([
+      "0", "0", "0", "3", "4", "3", "4", "4", "2", "2",
+    ]);
+  });
+
+  it("throws a readable error on a buffer that is not MIDI", () => {
+    expect(() => parseMidi(Uint8Array.from([1, 2, 3, 4]))).toThrow(MidiError);
+    expect(() => parseMidi(new ArrayBuffer(0))).toThrow("唔係 MIDI 檔");
+    const smpte = Uint8Array.from([
+      0x4d, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06,
+      0x00, 0x00, 0x00, 0x00, 0x80, 0x00,
+    ]);
+    expect(() => parseMidi(smpte)).toThrow("未支援 SMPTE 時間碼嘅 MIDI");
+  });
+
+  it("warns when the header names tracks the file does not contain", () => {
+    const data = Uint8Array.from([
+      0x4d, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06,
+      0x00, 0x00, 0x00, 0x01, 0x01, 0xe0,
+    ]);
+    const parsed = parseMidi(data);
+    expect(parsed.tracks).toEqual([]);
+    expect(parsed.warnings).toContain("MIDI 音軌數量同檔案唔夾");
+    expect(parsed.warnings).toContain("檔案入面冇旋律音");
+  });
+
+  it("throws when a track ends in the middle of a note event", () => {
+    const body = [0x00, 0x90, 0x3c];
+    const data = Uint8Array.from([
+      0x4d, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06,
+      0x00, 0x00, 0x00, 0x01, 0x01, 0xe0,
+      0x4d, 0x54, 0x72, 0x6b, 0x00, 0x00, 0x00, body.length,
+      ...body,
+    ]);
+    expect(() => parseMidi(data)).toThrow("MIDI 音軌唔完整");
   });
 });
