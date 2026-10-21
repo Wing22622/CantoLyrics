@@ -4,6 +4,7 @@ import {
   clearOverrides,
   effectiveCode,
   normalizeSlot,
+  slotsForTrackChoice,
   slotsFromNotes,
   withCode,
   type IncomingNote,
@@ -66,6 +67,32 @@ describe("slotsFromNotes", () => {
     expect(checkFit("歡", code, [{ jyutping: "fun1", tone: 1 }], null).status).toBe("mismatch");
     const seen = edited.map(effectiveCode);
     expect(seen).toEqual(["0", "0", "0", "0", "4"]);
+  });
+});
+
+describe("slotsForTrackChoice", () => {
+  it("keeps lyric text from before the file when the melody track replaces a one-note default track", () => {
+    const before = slotsFromNotes(laughter, [], false).map((slot, index) =>
+      index === 3 ? { ...withCode(slot, "0"), character: "歡", reading: "fun1" } : slot,
+    );
+    const piano = slotsForTrackChoice([note(48, "C3")], before, null);
+    expect(piano).toHaveLength(1);
+    expect(piano[0].character).toBe("");
+
+    const melody = slotsForTrackChoice(laughter, piano, before);
+    expect(melody.map((slot) => slot.character)).toEqual(["", "", "", "歡", ""]);
+    expect(melody[3].override).toBe(null);
+    expect(effectiveCode(melody[3])).toBe("3");
+    expect(melody[3].reading).toBe("fun1");
+  });
+
+  it("uses the current line after the user has edited since the import", () => {
+    const current = slotsFromNotes([note(64, "E4"), note(65, "F4")], [], false).map((slot, index) =>
+      index === 0 ? { ...slot, character: "但" } : slot,
+    );
+    const next = slotsForTrackChoice([note(72, "C5")], current, null);
+    expect(next[0].character).toBe("但");
+    expect(next[0].override).toBe(null);
   });
 });
 

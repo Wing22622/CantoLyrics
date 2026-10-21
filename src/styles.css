@@ -32,17 +32,13 @@ button:disabled {
 }
 
 .app {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 1.25rem;
-}
-
-.app.split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 1rem;
-  max-width: 1280px;
+  column-gap: 1rem;
   align-items: start;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1.25rem;
 }
 
 .top, .panel-head, .song-actions, .load-row, .filters, .legend {
@@ -134,6 +130,7 @@ input[type="text"], input:not([type]), select, .song-actions input, .load-row se
 }
 
 .syllable {
+  position: relative;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -240,6 +237,20 @@ input[type="text"], input:not([type]), select, .song-actions input, .load-row se
   text-align: left;
 }
 
+.slot-tools {
+  position: absolute;
+  top: calc(100% - 0.15rem);
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  transform: translateX(-50%);
+}
+
+.linkish { white-space: nowrap; background: #fffaf3; }
+
 .reading.on { border-color: #1d4e89; background: #eef4fb; }
 .reading span { float: right; color: #6d6256; }
 
@@ -299,6 +310,6 @@ fieldset label { flex-direction: row; align-items: center; }
 .suggest li span { color: #6d6256; font-size: 0.8rem; }
 
 @media (max-width: 860px) {
-  .app.split { grid-template-columns: 1fr; }
+  .app { grid-template-columns: 1fr; }
   .suggest { position: static; max-height: none; }
 }

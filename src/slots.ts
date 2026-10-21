@@ -43,6 +43,20 @@ export function clearOverrides(slots: readonly LyricSlot[]): LyricSlot[] {
 }
 
 /**
+ * Apply one MIDI track.
+ * A fresh import drops hand-edited codes.
+ * Until the user edits, every track in that file keeps text from the line
+ * that existed before the file, not from the short track shown by default.
+ */
+export function slotsForTrackChoice(
+  notes: readonly IncomingNote[],
+  current: readonly LyricSlot[],
+  lineBeforeImport: readonly LyricSlot[] | null,
+): LyricSlot[] {
+  return slotsFromNotes(notes, lineBeforeImport ?? current, false);
+}
+
+/**
  * Build sung slots from a melody.
  * Typed text stays on the same sung-note index.
  * Hand-edited codes stay too, unless `keepOverrides` is false (a fresh import).

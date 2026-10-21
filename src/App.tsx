@@ -8,7 +8,7 @@ import { parseJianpu } from "./jianpu";
 import { loadLexicon, type Lexicon } from "./lexicon";
 import { midiNoteName, parseMidi, type MidiTrack } from "./midi";
 import { splitSyllables } from "./syllables";
-import { clearOverrides, effectiveCode, slotsFromNotes, withCode, type IncomingNote } from "./slots";
+import { clearOverrides, effectiveCode, slotsForTrackChoice, slotsFromNotes, withCode, type IncomingNote } from "./slots";
 import { deleteSong, listSongs, saveSong, type StoredSong } from "./storage";
 import type { Code0243 } from "./tone-0243";
 import type { WordEntry } from "./suggest";
@@ -71,6 +71,11 @@ export function App() {
   const [pickedSave, setPickedSave] = useState("");
   const anchor = useRef(0);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
+  const lineBeforeImport = useRef<Slot[] | null>(null);
+
+  function dropImportedLine() {
+    lineBeforeImport.current = null;
+  }
 
   useEffect(() => {
     loadLexicon()
@@ -82,6 +87,7 @@ export function App() {
   }, []);
 
   function onJianpu(text: string) {
+    dropImportedLine();
     setJianpu(text);
     setMode("jianpu");
     const parsed = fromJianpu(text);
@@ -92,6 +98,7 @@ export function App() {
   }
 
   function onAlign() {
+    dropImportedLine();
     const syllables = splitSyllables(source);
     setSlots((prev) => {
       const aligned = alignSources(prev, syllables);
@@ -105,6 +112,7 @@ export function App() {
   }
 
   function loadExample() {
+    dropImportedLine();
     setTitle(EXAMPLE_TITLE);
     setSource(EXAMPLE_LYRICS);
     setJianpu(EXAMPLE_JIANPU);
@@ -135,7 +143,10 @@ export function App() {
       setTrackIndex(0);
       if (parsed.tracks.length > 0) {
         setMode("midi");
-        setSlots((prev) => toSlots(fromTrack(parsed.tracks[0]), prev, false));
+        setSlots((prev) => {
+          lineBeforeImport.current = prev;
+          return slotsForTrackChoice(fromTrack(parsed.tracks[0]), prev, null);
+        });
         setSelection([]);
       }
     } catch (error) {
@@ -146,7 +157,7 @@ export function App() {
   function chooseTrack(index: number) {
     setTrackIndex(index);
     setMode("midi");
-    setSlots((prev) => toSlots(fromTrack(tracks[index]), prev, false));
+    setSlots((prev) => slotsForTrackChoice(fromTrack(tracks[index]), prev, lineBeforeImport.current));
     setSelection([]);
   }
 
@@ -164,6 +175,7 @@ export function App() {
   }
 
   function onCommit(index: number, raw: string) {
+    dropImportedLine();
     const chars = Array.from(raw.replace(/\s+/g, ""));
     if (chars.length === 0) {
       setSlots((prev) =>
@@ -188,24 +200,29 @@ export function App() {
   }
 
   function onCode(index: number, code: Code0243) {
+    dropImportedLine();
     setSlots((prev) => prev.map((slot, i) => (i === index ? withCode(slot, code) : slot)));
   }
 
   function onClearCodes() {
+    dropImportedLine();
     setSlots((prev) => clearOverrides(prev));
   }
 
   function onReading(index: number, jyutping: string) {
+    dropImportedLine();
     setSlots((prev) =>
       prev.map((slot, i) => (i === index ? { ...slot, reading: jyutping } : slot)),
     );
   }
 
   function onSource(index: number, value: string) {
+    dropImportedLine();
     setSlots((prev) => prev.map((slot, i) => (i === index ? { ...slot, source: value } : slot)));
   }
 
   function onMelisma(index: number) {
+    dropImportedLine();
     setSlots((prev) => {
       const aligned = toggleMelisma(prev, index);
       return prev.map((slot, i) => ({
@@ -220,6 +237,7 @@ export function App() {
   }
 
   function onPick(word: WordEntry) {
+    dropImportedLine();
     const run = emptyRun(slots, selection);
     if (!run) return;
     setSlots((prev) => {
@@ -254,6 +272,7 @@ export function App() {
   }
 
   function onLoad() {
+    dropImportedLine();
     const song = saved.find((item) => item.id === pickedSave);
     if (!song) return;
     setSongId(song.id);
@@ -276,6 +295,7 @@ export function App() {
   }
 
   function onNew() {
+    dropImportedLine();
     setSongId(null);
     setTitle("");
     setJianpu("");
@@ -305,7 +325,7 @@ export function App() {
   const handEdited = slots.some((slot) => slot.override != null);
 
   return (
-    <div className={run ? "app split" : "app"}>
+    <div className="app">
       <div className="main">
         <header className="top">
           <div>

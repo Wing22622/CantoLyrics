@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef } from "react";
+import { indexFromPoint, nextDragIndex } from "../drag-select";
 import { formatBeats } from "../jianpu";
 import type { CharReading } from "../lexicon";
 import { effectiveCode, type LyricSlot } from "../slots";
@@ -38,13 +39,31 @@ export function SlotRow({
   const selected = new Set(selection);
   const drag = useRef(false);
   const dragged = useRef(false);
+  const dragIndex = useRef<number | null>(null);
+  const onSelectRef = useRef(onSelect);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  });
 
   useEffect(() => {
     const stop = () => {
       drag.current = false;
     };
+    const move = (event: PointerEvent) => {
+      if (!drag.current) return;
+      const next = nextDragIndex(dragIndex.current, indexFromPoint(document.elementFromPoint(event.clientX, event.clientY)));
+      if (next == null) return;
+      dragIndex.current = next;
+      dragged.current = true;
+      onSelectRef.current(next, true);
+    };
     window.addEventListener("pointerup", stop);
-    return () => window.removeEventListener("pointerup", stop);
+    window.addEventListener("pointermove", move);
+    return () => {
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointermove", move);
+    };
   }, []);
 
   return (
@@ -73,18 +92,15 @@ export function SlotRow({
                 fit?.status === "unknown" ? "is-unknown" : "",
               ].filter(Boolean).join(" ")}
               data-code={code}
+              data-slot={index}
               title={`${slot.label}${beat ? ` ${beat}` : ""}${hand ? "，手改聲調碼" : ""}`}
               onPointerDown={(event) => {
                 const target = event.target as HTMLElement;
                 if (target.closest("input, select, button")) return;
                 drag.current = true;
                 dragged.current = false;
+                dragIndex.current = index;
                 onSelect(index, event.shiftKey);
-              }}
-              onPointerEnter={() => {
-                if (!drag.current) return;
-                dragged.current = true;
-                onSelect(index, true);
               }}
               onClick={(event) => {
                 if (dragged.current) {
@@ -134,35 +150,39 @@ export function SlotRow({
               )}
               {fit?.status === "mismatch" ? <span className="flag">唔啱</span> : null}
               {fit?.status === "unknown" ? <span className="flag unknown">未收</span> : null}
-              {selected.has(index) && fit && fit.readings.length > 1 ? (
-                <span className="readings">
-                  {fit.readings.map((reading) => (
+              {selected.has(index) && ((fit && fit.readings.length > 1) || index > 0) ? (
+                <span className="slot-tools">
+                  {fit && fit.readings.length > 1 ? (
+                    <span className="readings">
+                      {fit.readings.map((reading) => (
+                        <button
+                          key={reading.jyutping}
+                          type="button"
+                          className={reading.jyutping === fit.active ? "reading on" : "reading"}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onReading(index, reading.jyutping);
+                          }}
+                        >
+                          {reading.jyutping}
+                          <span>{reading.codes.join("／")}</span>
+                        </button>
+                      ))}
+                    </span>
+                  ) : null}
+                  {index > 0 ? (
                     <button
-                      key={reading.jyutping}
                       type="button"
-                      className={reading.jyutping === fit.active ? "reading on" : "reading"}
+                      className="linkish"
                       onClick={(event) => {
                         event.stopPropagation();
-                        onReading(index, reading.jyutping);
+                        onMelisma(index);
                       }}
                     >
-                      {reading.jyutping}
-                      <span>{reading.codes.join("／")}</span>
+                      {slot.melisma ? "取消拖音" : "拖音"}
                     </button>
-                  ))}
+                  ) : null}
                 </span>
-              ) : null}
-              {selected.has(index) && index > 0 ? (
-                <button
-                  type="button"
-                  className="linkish"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onMelisma(index);
-                  }}
-                >
-                  {slot.melisma ? "取消拖音" : "拖音"}
-                </button>
               ) : null}
             </span>
           </Fragment>
