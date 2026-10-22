@@ -109,7 +109,7 @@ Export writes a `.txt` file: one line per bar, characters separated by spaces, �
 
 - One scaffold per phrase. No 節點斷開, no alternate fillings, no 同向 slider. 外張 only shows up as a gap cost (0 and 3 can stretch, but they still pay for the semitones). Hand-editing a code is the way to force another filling.
 - Hand edits survive 簡譜 edits when the note's pitch, spelling, and duration are unchanged, and are dropped on a new melody import (MIDI, another MIDI track, or audio). A fresh import still lines characters up by sung-note index.
-- While a MIDI file is open, switching track restores the line from before that file. That backup is dropped in one place, when a slot change is a real edit (a lyric, a code, the 簡譜, loading the example, opening a song, or an empty file). Changing the title or the big 原詞 box does not drop it.
+- While a MIDI file is open, switching track restores the line from before that file. That backup is dropped in one place, and only when the user edits a character or a code (or another slot edit such as 拖音). Choosing a track, or re-parsing the 簡譜, does not drop it. Changing the title or the big 原詞 box does not either. Loading the example, opening a song, or an empty file does.
 - A MIDI file with no melody track clears the lyric line and shows「檔案入面冇旋律音」.
 - Audio pitch is one note at a time. Polyphony, percussion, noise, and a quiet take will miss notes or warn that no melody was found. Timing is quantised; it is not a transcription.
 - No 六聲 or 九聲.

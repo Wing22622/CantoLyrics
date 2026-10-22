@@ -7,7 +7,7 @@ import { SuggestPanel } from "./components/SuggestPanel";
 import { SlotRow, type Slot } from "./components/SlotRow";
 import { EXAMPLE_JIANPU, EXAMPLE_LYRICS, EXAMPLE_TITLE } from "./example";
 import { exportLyrics } from "./export-lyrics";
-import { importedLineAfterChange, type SlotChange } from "./import-line";
+import { importedLineAfterChange, slotChangeFor, type SlotWrite } from "./import-line";
 import { parseJianpu } from "./jianpu";
 import { loadLexicon, type Lexicon } from "./lexicon";
 import { midiNoteName, parseMidi, type MidiTrack } from "./midi";
@@ -115,7 +115,7 @@ export function App() {
   const anchor = useRef(0);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const lineBeforeImport = useRef<Slot[] | null>(null);
-  const slotChange = useRef<SlotChange>("import");
+  const slotChange = useRef(slotChangeFor("import"));
   const slotsRef = useRef<Slot[]>([]);
   const savedSnapshot = useRef("");
   const draftRef = useRef<Draft>({ songId: null, title: "", jianpu: "", source: "", slots: [] });
@@ -126,15 +126,12 @@ export function App() {
     lineBeforeImport.current = importedLineAfterChange(lineBeforeImport.current, slotChange.current);
   }, [slots]);
 
-  /** A real edit. The effect drops the import backup, so handlers cannot forget. */
-  function editSlots(next: Slot[] | ((prev: Slot[]) => Slot[])) {
-    slotChange.current = "user";
-    setSlotsState(next);
-  }
-
-  /** A melody import. Pass `backup` to remember the line from before this file. */
-  function keepSlots(next: Slot[] | ((prev: Slot[]) => Slot[]), backup?: Slot[] | null) {
-    slotChange.current = "import";
+  /**
+   * Every slot write comes through here.
+   * `edit` drops the import backup. Re-parse, track choice, and import do not.
+   */
+  function applySlots(write: SlotWrite, next: Slot[] | ((prev: Slot[]) => Slot[]), backup?: Slot[] | null) {
+    slotChange.current = slotChangeFor(write);
     if (backup !== undefined) lineBeforeImport.current = backup;
     setSlotsState(next);
   }
@@ -198,7 +195,7 @@ export function App() {
     setTitle(song.title);
     setJianpu(song.jianpu);
     setSource(song.sourceLyrics);
-    editSlots(song.slots);
+    applySlots("edit", song.slots);
     setMode(song.jianpu.trim() ? "jianpu" : song.slots.length > 0 ? "midi" : "jianpu");
     setTracks([]);
     setTrackIndex(0);
@@ -261,13 +258,13 @@ export function App() {
     const parsed = fromJianpu(text);
     setTonic(parsed.tonic);
     setWarnings(parsed.warnings);
-    editSlots((prev) => toSlots(parsed.notes, prev, true));
+    applySlots("reparse", (prev) => toSlots(parsed.notes, prev, true));
     setSelection([]);
   }
 
   function onAlign() {
     const syllables = splitSyllables(source);
-    editSlots((prev) => {
+    applySlots("edit", (prev) => {
       const aligned = alignSources(prev, syllables);
       return prev.map((slot, index) => ({
         ...slot,
@@ -289,7 +286,7 @@ export function App() {
     const syllables = splitSyllables(EXAMPLE_LYRICS);
     const base = toSlots(parsed.notes, [], false);
     const aligned = alignSources(base, syllables);
-    editSlots(
+    applySlots("edit", 
       base.map((slot, index) => ({
         ...slot,
         source: aligned[index].source,
@@ -309,12 +306,12 @@ export function App() {
       setTrackIndex(0);
       if (parsed.tracks.length === 0) {
         setMode("jianpu");
-        editSlots([]);
+        applySlots("edit", []);
         setSelection([]);
         return;
       }
       setMode("midi");
-      keepSlots(slotsForTrackChoice(fromTrack(parsed.tracks[0]), slotsRef.current, null), slotsRef.current);
+      applySlots("import", slotsForTrackChoice(fromTrack(parsed.tracks[0]), slotsRef.current, null), slotsRef.current);
       setSelection([]);
     } catch (error) {
       setWarnings([error instanceof Error ? error.message : "MIDI 讀唔到"]);
@@ -331,7 +328,7 @@ export function App() {
       if (notes.length === 0) {
         setTracks([]);
         setMode("jianpu");
-        editSlots([]);
+        applySlots("edit", []);
         setSelection([]);
         setWarnings(["呢段錄音搵唔到清楚嘅旋律"]);
         return;
@@ -339,13 +336,13 @@ export function App() {
       setTracks([]);
       setTrackIndex(0);
       setMode("audio");
-      keepSlots(slotsForTrackChoice(notes, slotsRef.current, null), slotsRef.current);
+      applySlots("import", slotsForTrackChoice(notes, slotsRef.current, null), slotsRef.current);
       setSelection([]);
       setWarnings(clipped ? ["只係分析咗頭 90 秒。"] : []);
     } catch {
       setTracks([]);
       setMode("jianpu");
-      editSlots([]);
+      applySlots("edit", []);
       setSelection([]);
       setWarnings(["呢個音訊檔讀唔到"]);
     }
@@ -356,7 +353,7 @@ export function App() {
     if (!track) return;
     setTrackIndex(index);
     setMode("midi");
-    keepSlots(slotsForTrackChoice(fromTrack(track), slotsRef.current, lineBeforeImport.current));
+    applySlots("track", slotsForTrackChoice(fromTrack(track), slotsRef.current, lineBeforeImport.current));
     setSelection([]);
   }
 
@@ -376,13 +373,13 @@ export function App() {
   function onCommit(index: number, raw: string) {
     const chars = Array.from(raw.replace(/\s+/g, ""));
     if (chars.length === 0) {
-      editSlots((prev) =>
+      applySlots("edit", (prev) =>
         prev.map((slot, i) => (i === index ? { ...slot, character: "", reading: null } : slot)),
       );
       return;
     }
     let last = index;
-    editSlots((prev) => {
+    applySlots("edit", (prev) => {
       const next = prev.map((slot) => ({ ...slot }));
       let cursor = index;
       for (const char of chars) {
@@ -398,25 +395,25 @@ export function App() {
   }
 
   function onCode(index: number, code: Code0243) {
-    editSlots((prev) => prev.map((slot, i) => (i === index ? withCode(slot, code) : slot)));
+    applySlots("edit", (prev) => prev.map((slot, i) => (i === index ? withCode(slot, code) : slot)));
   }
 
   function onClearCodes() {
-    editSlots((prev) => clearOverrides(prev));
+    applySlots("edit", (prev) => clearOverrides(prev));
   }
 
   function onReading(index: number, jyutping: string) {
-    editSlots((prev) =>
+    applySlots("edit", (prev) =>
       prev.map((slot, i) => (i === index ? { ...slot, reading: jyutping } : slot)),
     );
   }
 
   function onSource(index: number, value: string) {
-    editSlots((prev) => prev.map((slot, i) => (i === index ? { ...slot, source: value } : slot)));
+    applySlots("edit", (prev) => prev.map((slot, i) => (i === index ? { ...slot, source: value } : slot)));
   }
 
   function onMelisma(index: number) {
-    editSlots((prev) => {
+    applySlots("edit", (prev) => {
       const aligned = toggleMelisma(prev, index);
       return prev.map((slot, i) => ({
         ...slot,
@@ -432,7 +429,7 @@ export function App() {
   function onPick(word: WordEntry) {
     const run = emptyRun(slots, selection);
     if (!run) return;
-    editSlots((prev) => {
+    applySlots("edit", (prev) => {
       const next = prev.map((slot) => ({ ...slot }));
       run.slice(0, word.text.length).forEach((slotIndex, offset) => {
         next[slotIndex] = {
