@@ -83,9 +83,11 @@ export function SlotRow({
             {showBar ? <span className="phrase-break" aria-hidden="true">｜</span> : null}
             <span
               role="listitem"
+              tabIndex={slot.melisma ? -1 : undefined}
               className={[
                 "syllable",
                 selected.has(index) ? "is-selected" : "",
+                !slot.melisma && !slot.character ? "is-empty" : "",
                 slot.melisma ? "is-melisma" : "",
                 hand ? "is-override" : "",
                 fit?.status === "mismatch" ? "is-bad" : "",
@@ -95,6 +97,13 @@ export function SlotRow({
               data-slot={index}
               data-slot-id={slot.id}
               title={`${slot.label}${beat ? ` ${beat}` : ""}${hand ? "，手改聲調碼" : ""}`}
+              onMouseDown={(event) => {
+                const target = event.target as HTMLElement;
+                if (target.closest("input, select, button")) return;
+                // Keep the caret and IME composition when the press is on the
+                // syllable chrome rather than the character field.
+                event.preventDefault();
+              }}
               onPointerDown={(event) => {
                 const target = event.target as HTMLElement;
                 if (target.closest("input, select, button")) return;
@@ -109,6 +118,15 @@ export function SlotRow({
                   return;
                 }
                 onSelect(index, event.shiftKey);
+                const target = event.target as HTMLElement;
+                if (target.closest("input, select, button")) return;
+                if (event.shiftKey) return;
+                const field = event.currentTarget.querySelector<HTMLInputElement>("input.char");
+                if (field) {
+                  if (document.activeElement !== field) field.focus();
+                  return;
+                }
+                if (document.activeElement !== event.currentTarget) event.currentTarget.focus();
               }}
             >
               <span className="pitch">{slot.label}</span>
@@ -139,7 +157,9 @@ export function SlotRow({
                   onCommit={(value) => onCommit(index, value)}
                 />
               )}
-              {slot.melisma ? null : (
+              {slot.melisma ? (
+                <span className="source-pad" aria-hidden="true" />
+              ) : (
                 <input
                   className="source"
                   aria-label={`第 ${index + 1} 個原詞音節`}

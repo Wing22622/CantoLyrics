@@ -116,16 +116,21 @@ input[type="text"], input:not([type]), select, .song-actions input, .load-row se
 .line {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 0.15rem 0.05rem;
-  padding: 0.35rem 0.1rem 0.2rem;
+  align-items: flex-end;
+  gap: 0.55rem 0;
+  margin: 0.25rem 0 0.15rem;
+  padding: 0.45rem 0.35rem 0.4rem;
+  background: #fffdf9;
+  border: 1px solid #e6d9c8;
+  border-radius: 12px;
   user-select: none;
+  touch-action: manipulation;
 }
 
 .phrase-break {
-  align-self: center;
+  align-self: flex-end;
   color: #c4b5a3;
-  padding: 0.85rem 0.2rem 0;
+  padding: 0 0.28rem 1.2rem;
   font-size: 0.95rem;
 }
 
@@ -134,28 +139,52 @@ input[type="text"], input:not([type]), select, .song-actions input, .load-row se
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.05rem;
-  min-width: 1.7rem;
-  padding: 0.1rem 0.12rem 0.2rem;
-  border-radius: 8px;
+  gap: 0;
+  min-width: 1.65rem;
+  padding: 0.08rem 0.04rem 0.12rem;
+  border-radius: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.syllable.is-selected { background: #e4eef8; }
+.syllable:focus { outline: none; }
+
+.syllable.is-selected .char,
+.syllable.is-selected .glyph.melisma {
+  background: #e7f1fa;
+}
+.syllable.is-selected:focus-within .char,
+.syllable.is-selected:focus-within .glyph.melisma {
+  background: transparent;
+}
 .syllable.is-bad .char { color: #9f1239; box-shadow: inset 0 -2px 0 #e7b4b4; }
 .syllable.is-unknown .char { box-shadow: inset 0 -2px 0 #ead7a1; }
+.syllable.is-empty .char { box-shadow: inset 0 -1px 0 #e3d5c3; }
 .syllable.is-melisma { color: #8a7b6a; }
+
+.pitch,
+.code,
+.char,
+.glyph.melisma {
+  transition: font-size 100ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pitch, .code, .char, .glyph.melisma { transition: none; }
+}
 
 .pitch {
   color: #8a7b6a;
   font-size: 0.62rem;
-  line-height: 1;
+  line-height: 1.1;
 }
+.syllable:focus-within .pitch { font-size: 0.98rem; }
 
 .code-row {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.05rem;
-  min-height: 1rem;
+  min-height: 1.05em;
 }
 
 .code {
@@ -165,11 +194,13 @@ input[type="text"], input:not([type]), select, .song-actions input, .load-row se
   font-weight: 700;
   font-size: 0.95rem;
   line-height: 1;
-  width: 1.35rem;
+  width: 1.35em;
+  min-width: 0;
   padding: 0;
   text-align: center;
   cursor: pointer;
 }
+.syllable:focus-within .code { font-size: 1.5rem; }
 .syllable[data-code="0"] .code { color: #1d4e89; }
 .syllable[data-code="2"] .code { color: #0f6e6e; }
 .syllable[data-code="4"] .code { color: #8a5a00; }
@@ -185,37 +216,58 @@ input[type="text"], input:not([type]), select, .song-actions input, .load-row se
   color: #8a5a00;
   line-height: 1;
 }
+.syllable:focus-within .edit-mark { font-size: 0.98rem; }
 
-.glyph, .char, .source {
-  width: 1.55rem;
-  text-align: center;
-}
-
-.char, .source {
+.syllable input.char,
+.syllable input.source,
+.syllable select.code {
+  outline: none;
   border: 0;
   border-radius: 0;
   background: transparent;
   padding: 0;
-  box-shadow: inset 0 -1px 0 #eadfD2;
+  box-shadow: none;
+}
+
+.char, .glyph.melisma, .source {
+  text-align: center;
+}
+
+.char, .source {
+  user-select: text;
 }
 
 .char {
-  font-size: 1.65rem;
+  font-size: 1.55rem;
   line-height: 1.15;
-  height: 1.9rem;
+  width: 1.2em;
+  height: 1.22em;
+  min-width: 0;
+  caret-color: #241c15;
 }
+.syllable:focus-within .char { font-size: 2.45rem; }
 
 .char.bad { color: #9f1239; }
 
-.source {
+.source, .source-pad {
+  display: block;
   font-size: 0.78rem;
-  color: #5c5146;
+  width: 1.86rem;
   height: 1.05rem;
-  box-shadow: none;
+}
+
+.source {
+  color: #5c5146;
 }
 .source::placeholder { color: #d9cbb8; }
 
-.glyph.melisma { color: #8a7b6a; font-size: 1.2rem; line-height: 1.7rem; }
+.glyph.melisma {
+  color: #8a7b6a;
+  font-size: 1.35rem;
+  line-height: 1.15;
+  width: 1.2em;
+}
+.syllable:focus-within .glyph.melisma { font-size: 2.13rem; }
 
 .flag {
   color: #9f1239;
