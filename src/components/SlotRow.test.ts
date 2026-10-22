@@ -116,8 +116,28 @@ describe("lyric slot focus", () => {
     expect(document.activeElement).toBe(chars[0]);
     expect(chars[0].selectionStart).toBe(0);
 
+    const otherPitch = syllables[1].querySelector(".pitch")!;
+    const otherDown = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
     act(() => {
-      syllables[1].querySelector(".pitch")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      otherPitch.dispatchEvent(otherDown);
+      otherPitch.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(document.activeElement).toBe(chars[0]);
+    expect(chars[0].selectionStart).toBe(0);
+
+    const code = syllables[0].querySelector("select.code")!;
+    const codeDown = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    act(() => {
+      code.dispatchEvent(codeDown);
+      code.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(codeDown.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(chars[0]);
+    expect(chars[0].selectionStart).toBe(0);
+
+    act(() => {
+      chars[1].focus();
+      chars[1].dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(document.activeElement).toBe(chars[1]);
     expect(syllables[1].matches(":focus-within")).toBe(true);
@@ -130,6 +150,41 @@ describe("lyric slot focus", () => {
     });
     expect(document.activeElement).toBe(chars[1]);
     expect(onSelect).toHaveBeenCalledWith(0, true);
+  });
+
+  it("moves across syllables with the arrow keys and ignores them during IME", () => {
+    const node = render([
+      slot("3", { character: "人" }),
+      slot("4", { character: "常" }),
+      slot("5", { melisma: true, character: "", source: "" }),
+      slot("6", { character: "笑" }),
+    ]);
+    const chars = [...node.querySelectorAll<HTMLInputElement>("input.char")];
+    act(() => {
+      chars[0].focus();
+      chars[0].setSelectionRange(1, 1);
+      chars[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+    });
+    expect(document.activeElement).toBe(chars[1]);
+    expect(chars[1].closest(".syllable")?.matches(":focus-within")).toBe(true);
+    expect(chars[0].closest(".syllable")?.matches(":focus-within")).toBe(false);
+
+    act(() => {
+      chars[1].setSelectionRange(1, 1);
+      chars[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+    });
+    expect(document.activeElement).toBe(chars[2]);
+
+    act(() => {
+      chars[2].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
+    });
+    expect(document.activeElement).toBe(chars[1]);
+
+    act(() => {
+      chars[1].setSelectionRange(1, 1);
+      chars[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true, isComposing: true }));
+    });
+    expect(document.activeElement).toBe(chars[1]);
   });
 
   it("keeps the caret in the character field through an IME composition", () => {
