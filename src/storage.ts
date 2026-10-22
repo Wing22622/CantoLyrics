@@ -116,10 +116,10 @@ export function listSongs(): StoredSong[] {
   return readAll().sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-export function blankSong(now = Date.now()): StoredSong {
+export function blankSong(title = "未命名", now = Date.now()): StoredSong {
   return {
     id: crypto.randomUUID(),
-    title: "未命名",
+    title: title.trim() || "未命名",
     updatedAt: now,
     jianpu: "",
     sourceLyrics: "",

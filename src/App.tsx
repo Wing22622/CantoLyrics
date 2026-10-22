@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { alignSources, alignmentNote, toggleMelisma } from "./align";
-import { LibraryView } from "./components/LibraryView";
+import { CreateSongPrompt, LibraryView } from "./components/LibraryView";
 import { SuggestPanel } from "./components/SuggestPanel";
 import { SlotRow, type Slot } from "./components/SlotRow";
 import { EXAMPLE_JIANPU, EXAMPLE_LYRICS, EXAMPLE_TITLE } from "./example";
@@ -106,6 +106,7 @@ export function App() {
   const [saved, setSaved] = useState<StoredSong[]>([]);
   const [songId, setSongId] = useState<string | null>(null);
   const [storageError, setStorageError] = useState("");
+  const [creating, setCreating] = useState(false);
   const anchor = useRef(0);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const lineBeforeImport = useRef<Slot[] | null>(null);
@@ -190,9 +191,9 @@ export function App() {
     setView("editor");
   }
 
-  function onCreate() {
+  function onCreate(title?: string) {
     if (view === "editor" && !flush()) return;
-    const created = blankSong();
+    const created = blankSong(title ?? "未命名");
     try {
       setSaved(saveSong(created));
       setStorageError("");
@@ -462,9 +463,19 @@ export function App() {
               歌名
               <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="未命名" />
             </label>
-            <button type="button" onClick={onCreate}>
-              新歌
-            </button>
+            {creating ? (
+              <CreateSongPrompt
+                onConfirm={(next) => {
+                  setCreating(false);
+                  onCreate(next);
+                }}
+                onCancel={() => setCreating(false)}
+              />
+            ) : (
+              <button type="button" className="text-link" onClick={() => setCreating(true)}>
+                新歌
+              </button>
+            )}
             <button type="button" onClick={onSave}>
               儲存
             </button>

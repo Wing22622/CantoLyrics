@@ -97,7 +97,7 @@ Not used:
 
 The app opens on 歌曲庫. Each card shows the title, the local updated time, and a short lyric preview (typed characters, or the source lyric when nothing is typed yet). Search matches the title, the source lyric, and characters in the slots.
 
-新歌 creates an empty song and opens the editor. 開啟 opens that song. 改名 renames it. 刪除 asks 確定刪除 before removing it. 返回歌庫 leaves the editor. Edits auto-save in the open song, and leaving the editor saves again. Saving one song does not replace the others.
+An empty library has one 開新歌 button, which opens a blank song. Once any song exists, that button is gone. 新歌 is a text link: type a title, then 建立. The first tap does not add a song. 開啟 opens a song. 改名 renames it. 刪除 asks 確定刪除 before removing it. 返回歌庫 leaves the editor. Edits auto-save in the open song, and leaving the editor saves again. Saving one song does not replace the others.
 
 Songs stay in `localStorage` under `cantolyrics.songs.v1`. M1 already stored an array there, so those songs show up in the library. If that key holds one song object instead of an array, the first read wraps it into the library and writes the array back. A full disk throws a readable error and leaves the previous songs in place. There is still no account and no server.
 

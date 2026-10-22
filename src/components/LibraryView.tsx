@@ -7,10 +7,47 @@ interface LibraryViewProps {
   query: string;
   storageError: string;
   onQuery: (query: string) => void;
-  onCreate: () => void;
+  onCreate: (title?: string) => void;
   onOpen: (song: StoredSong) => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+}
+
+/** Title, then 建立. Nothing is saved until that confirm. */
+export function CreateSongPrompt({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: (title: string) => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  return (
+    <form
+      className="create-song"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const next = title.trim();
+        if (!next) return;
+        onConfirm(next);
+      }}
+    >
+      <label>
+        新歌歌名
+        <input
+          value={title}
+          aria-label="新歌歌名"
+          onChange={(event) => setTitle(event.target.value)}
+        />
+      </label>
+      <button type="submit" disabled={!title.trim()}>
+        建立
+      </button>
+      <button type="button" className="ghost" onClick={onCancel}>
+        取消
+      </button>
+    </form>
+  );
 }
 
 export function LibraryView({
@@ -26,6 +63,7 @@ export function LibraryView({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [drafting, setDrafting] = useState(false);
   const shown = filterSongs(songs, query);
 
   function startRename(song: StoredSong) {
@@ -46,9 +84,6 @@ export function LibraryView({
           <p className="eyebrow">CantoLyrics</p>
           <h1>歌曲庫</h1>
         </div>
-        <button type="button" onClick={onCreate}>
-          新歌
-        </button>
       </header>
       <label className="search">
         搜尋歌名或歌詞
@@ -59,11 +94,26 @@ export function LibraryView({
         />
       </label>
       {storageError ? <p className="warnings">{storageError}</p> : null}
+      {songs.length > 0 ? (
+        drafting ? (
+          <CreateSongPrompt
+            onConfirm={(title) => {
+              setDrafting(false);
+              onCreate(title);
+            }}
+            onCancel={() => setDrafting(false)}
+          />
+        ) : (
+          <button type="button" className="text-link" onClick={() => setDrafting(true)}>
+            新歌
+          </button>
+        )
+      ) : null}
       {songs.length === 0 ? (
         <section className="panel empty">
           <h2>未有歌曲</h2>
           <p className="hint">歌會儲存喺呢個瀏覽器。開一首新歌，之後可以喺度搵返。</p>
-          <button type="button" onClick={onCreate}>
+          <button type="button" onClick={() => onCreate()}>
             開新歌
           </button>
         </section>

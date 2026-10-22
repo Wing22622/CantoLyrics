@@ -337,7 +337,18 @@ fieldset label { flex-direction: row; align-items: center; }
 
 .preview { font-size: 1.05rem; }
 
-.card-actions, .confirm, .rename-row {
+button.text-link {
+  background: none;
+  color: #5c5146;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.card-actions, .confirm, .rename-row, .create-song {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
