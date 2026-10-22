@@ -20,8 +20,8 @@ describe("song library search", () => {
       updatedAt: 1,
       sourceLyrics: "不要眼淚掉",
       slots: [
-        { pitch: 60, beats: 1, label: "1", bar: 1, mapped: "4", override: null, source: "", melisma: false, character: "歡", reading: null },
-        { pitch: 62, beats: 1, label: "2", bar: 1, mapped: "4", override: null, source: "", melisma: false, character: "", reading: null },
+        { id: "a", pitch: 60, beats: 1, label: "1", bar: 1, mapped: "4", override: null, source: "", melisma: false, character: "歡", reading: null },
+        { id: "b", pitch: 62, beats: 1, label: "2", bar: 1, mapped: "4", override: null, source: "", melisma: false, character: "", reading: null },
       ],
     }),
     song({
@@ -30,8 +30,8 @@ describe("song library search", () => {
       updatedAt: 2,
       sourceLyrics: "",
       slots: [
-        { pitch: 64, beats: 1, label: "3", bar: 1, mapped: "0", override: null, source: "", melisma: false, character: "但", reading: null },
-        { pitch: 65, beats: 1, label: "4", bar: 1, mapped: "2", override: null, source: "", melisma: false, character: "係", reading: null },
+        { id: "c", pitch: 64, beats: 1, label: "3", bar: 1, mapped: "0", override: null, source: "", melisma: false, character: "但", reading: null },
+        { id: "d", pitch: 65, beats: 1, label: "4", bar: 1, mapped: "2", override: null, source: "", melisma: false, character: "係", reading: null },
       ],
     }),
   ];
@@ -61,6 +61,7 @@ describe("song library search", () => {
       id: "long",
       title: "長",
       slots: Array.from({ length: 30 }, () => ({
+        id: "long",
         pitch: 60,
         beats: 1,
         label: "1",

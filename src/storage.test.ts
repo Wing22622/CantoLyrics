@@ -21,6 +21,7 @@ function song(id: string, title: string, updatedAt: number, character = "歌"): 
     sourceLyrics: "hello",
     slots: [
       {
+        id: `${id}-slot`,
         pitch: 60,
         beats: 1,
         label: "1",

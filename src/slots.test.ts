@@ -51,6 +51,49 @@ describe("slotsFromNotes", () => {
     expect(imported[3].character).toBe("常");
   });
 
+  it("keeps characters and hand edits on the same notes when one is inserted at the front", () => {
+    const first = slotsFromNotes([note(64, "3"), note(65, "4"), note(67, "5")], [], true);
+    const edited = first.map((slot, index) => {
+      if (index === 0) return { ...slot, character: "歡" };
+      if (index === 1) return { ...withCode(slot, "3"), character: "笑" };
+      return slot;
+    });
+    const next = slotsFromNotes(
+      [note(60, "1"), note(64, "3"), note(65, "4"), note(67, "5")],
+      edited,
+      true,
+    );
+    expect(next.map((slot) => slot.label)).toEqual(["1", "3", "4", "5"]);
+    expect(next.map((slot) => slot.character)).toEqual(["", "歡", "笑", ""]);
+    expect(next[0].override).toBe(null);
+    expect(next[2].override).toBe("3");
+    expect(next[1].id).toBe(edited[0].id);
+    expect(next[2].id).toBe(edited[1].id);
+    expect(next[3].id).toBe(edited[2].id);
+  });
+
+  it("keeps the old block together when the inserted note matches the first pitch", () => {
+    const first = slotsFromNotes([note(64, "3"), note(65, "4"), note(67, "5")], [], true).map(
+      (slot, index) => (index === 0 ? { ...slot, character: "歡" } : slot),
+    );
+    const next = slotsFromNotes(
+      [note(64, "3"), note(64, "3"), note(65, "4"), note(67, "5")],
+      first,
+      true,
+    );
+    expect(next.map((slot) => slot.character)).toEqual(["", "歡", "", ""]);
+    expect(next[1].id).toBe(first[0].id);
+  });
+
+  it("still follows the sung-note index on a fresh import", () => {
+    const first = slotsFromNotes([note(64, "3"), note(65, "4")], [], true).map((slot, index) =>
+      index === 0 ? { ...withCode(slot, "2"), character: "歡" } : { ...slot, character: "笑" },
+    );
+    const imported = slotsFromNotes([note(60, "1"), note(64, "3"), note(65, "4")], first, false);
+    expect(imported.map((slot) => slot.character)).toEqual(["歡", "笑", ""]);
+    expect(imported[0].override).toBe(null);
+  });
+
   it("clears the mark when the user picks the mapped code again", () => {
     const [slot] = slotsFromNotes([note(60, "1")], [], true);
     const edited = withCode(slot, "0");

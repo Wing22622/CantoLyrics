@@ -35,7 +35,7 @@ The lyric editor is one sentence, not a grid of cards. Syllables sit inline and 
 
 The code is a menu of 0, 2, 4, and 3. Changing it stores a hand edit, marked 改 with a dashed underline. Editing the 簡譜 re-parses the melody and keeps those edits on the same sung-note index, along with the characters already typed. A fresh import clears the edits: 載入例句, uploading a MIDI file, or switching MIDI track. 還原聲調碼 clears them too, and choosing the mapped code again clears that one syllable. Mismatch flags and the suggestion list use the code on screen, hand edit or mapped.
 
-Hand edits follow the sung-note index. Inserting a note at the front shifts which syllable they sit on, the same way typed characters do. Stable ids for that case are not in this version.
+Hand edits follow the note. Re-parsing the 簡譜 lines the old syllables up with notes that still have the same pitch, spelling, and duration, and keeps each syllable's id. Adding a note at the front leaves the typed characters and hand edits on the notes they were on. A fresh import still follows the sung-note index and clears hand edits.
 
 ## 0243 rules
 
@@ -106,7 +106,7 @@ Export writes a `.txt` file: one line per bar, characters separated by spaces, �
 ## Known limitations
 
 - One scaffold per phrase. No 節點斷開, no alternate fillings, no 同向 slider. 外張 only shows up as a gap cost (0 and 3 can stretch, but they still pay for the semitones). Hand-editing a code is the way to force another filling.
-- Hand edits are stored per sung-note index. They survive 簡譜 edits and are dropped on a new melody import. TODO: stable slot ids, so inserting a note earlier keeps the typed character and the tone override on that note.
+- Hand edits survive 簡譜 edits when the note's pitch, spelling, and duration are unchanged, and are dropped on a new melody import. A fresh import still lines characters up by sung-note index.
 - TODO: clear the MIDI import backup only after a slot is actually edited. Handlers still call `dropImportedLine` up front. The backup is no longer written inside the `setSlots` updater.
 - A MIDI file with no melody track clears the lyric line and shows「檔案入面冇旋律音」.
 - No 六聲 or 九聲.
