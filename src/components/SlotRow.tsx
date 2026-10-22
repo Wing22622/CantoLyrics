@@ -79,7 +79,7 @@ export function SlotRow({
         const beat = formatBeats(slot.beats);
         const hand = slot.override != null;
         return (
-          <Fragment key={`${slot.bar}-${index}`}>
+          <Fragment key={slot.id}>
             {showBar ? <span className="phrase-break" aria-hidden="true">｜</span> : null}
             <span
               role="listitem"
@@ -93,6 +93,7 @@ export function SlotRow({
               ].filter(Boolean).join(" ")}
               data-code={code}
               data-slot={index}
+              data-slot-id={slot.id}
               title={`${slot.label}${beat ? ` ${beat}` : ""}${hand ? "，手改聲調碼" : ""}`}
               onPointerDown={(event) => {
                 const target = event.target as HTMLElement;

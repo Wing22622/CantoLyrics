@@ -1,6 +1,6 @@
 # CantoLyrics
 
-A small browser app for writing Cantonese lyrics (填詞) against a melody. Paste 簡譜 or upload a MIDI file, see a 0243 tone code on every note, type Cantonese characters in one flowing line, and get word suggestions that fit the codes. Any code can be edited by hand.
+A small browser app for writing Cantonese lyrics (填詞) against a melody. Paste 簡譜, upload a MIDI file, or upload an audio recording, see a 0243 tone code on every note, type Cantonese characters in one flowing line, and get word suggestions that fit the codes. Any code can be edited by hand.
 
 M1 is client-only. Vite builds a static site that can be hosted on Vercel. There is no backend and this repo does not deploy anything.
 
@@ -27,13 +27,15 @@ npm run dev
 
 MIDI: format 0 or 1. If the file has several tracks, pick one. A chord keeps the highest note. A later overlapping note trims the one before it.
 
+Audio (MP3, WAV, and other files the browser can decode): the page resamples to mono and estimates one pitch at a time with YIN. Stable pitches become notes. Rhythm is only a rough grid, a quarter note at 120 BPM snapped to the nearest eighth, and a bar is 4 beats. This is a monophonic guess. Chords, harmony, and drums come out wrong or not at all. A silent or unpitched file shows「呢段錄音搵唔到清楚嘅旋律」and clears the line. A file the browser cannot decode shows「呢個音訊檔讀唔到」and clears the line too. Only the first 90 seconds are analysed.
+
 Rests have no code and no lyric slot. Each sung note is one syllable in the line.
 
 ## Editor
 
 The lyric editor is one sentence, not a grid of cards. Syllables sit inline and wrap. A bar is a light `｜`. Each syllable shows the pitch, the 0243 code, the character you type, and the original syllable underneath. Click a syllable, shift-click, or drag across the line to select consecutive empty syllables for suggestions. 拖音 and extra readings show on the syllable you have selected.
 
-The code is a menu of 0, 2, 4, and 3. Changing it stores a hand edit, marked 改 with a dashed underline. Editing the 簡譜 re-parses the melody and keeps those edits on the same sung-note index, along with the characters already typed. A fresh import clears the edits: 載入例句, uploading a MIDI file, or switching MIDI track. 還原聲調碼 clears them too, and choosing the mapped code again clears that one syllable. Mismatch flags and the suggestion list use the code on screen, hand edit or mapped.
+The code is a menu of 0, 2, 4, and 3. Changing it stores a hand edit, marked 改 with a dashed underline. Editing the 簡譜 re-parses the melody and keeps those edits on the same note, along with the characters already typed. A fresh import clears the edits: 載入例句, uploading a MIDI file, switching MIDI track, or uploading a recording. The recording import says so next to the file control: typed characters stay by sung-note index, hand-edited codes do not. 還原聲調碼 clears them too, and choosing the mapped code again clears that one syllable. Mismatch flags and the suggestion list use the code on screen, hand edit or mapped.
 
 Hand edits follow the note. Re-parsing the 簡譜 lines the old syllables up with notes that still have the same pitch, spelling, and duration, and keeps each syllable's id. Adding a note at the front leaves the typed characters and hand edits on the notes they were on. A fresh import still follows the sung-note index and clears hand edits.
 
@@ -106,9 +108,10 @@ Export writes a `.txt` file: one line per bar, characters separated by spaces, �
 ## Known limitations
 
 - One scaffold per phrase. No 節點斷開, no alternate fillings, no 同向 slider. 外張 only shows up as a gap cost (0 and 3 can stretch, but they still pay for the semitones). Hand-editing a code is the way to force another filling.
-- Hand edits survive 簡譜 edits when the note's pitch, spelling, and duration are unchanged, and are dropped on a new melody import. A fresh import still lines characters up by sung-note index.
-- TODO: clear the MIDI import backup only after a slot is actually edited. Handlers still call `dropImportedLine` up front. The backup is no longer written inside the `setSlots` updater.
+- Hand edits survive 簡譜 edits when the note's pitch, spelling, and duration are unchanged, and are dropped on a new melody import (MIDI, another MIDI track, or audio). A fresh import still lines characters up by sung-note index.
+- While a MIDI file is open, switching track restores the line from before that file. That backup is dropped in one place, when a slot change is a real edit (a lyric, a code, the 簡譜, loading the example, opening a song, or an empty file). Changing the title or the big 原詞 box does not drop it.
 - A MIDI file with no melody track clears the lyric line and shows「檔案入面冇旋律音」.
+- Audio pitch is one note at a time. Polyphony, percussion, noise, and a quiet take will miss notes or warn that no melody was found. Timing is quantised; it is not a transcription.
 - No 六聲 or 九聲.
 - 變調 is honoured only when the lexicon lists it as its own reading.
 - Rising tones may fit an extra code. That is more permissive than “陰上 = 三 only”.
