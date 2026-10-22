@@ -1,0 +1,24 @@
+CantoLyrics includes a filtered lexicon derived from rime-cantonese.
+
+Source: rime-cantonese
+https://github.com/rime/rime-cantonese
+Commit: 259f0e48bba840c3a2e0d117539e96937f3d89bc
+Dictionary version: 2026.08.10
+
+Copyright 粵語計算語言學基礎建設組 CanCLID
+
+Licensed under the Creative Commons Attribution 4.0 International License
+(CC BY 4.0).
+https://creativecommons.org/licenses/by/4.0/
+
+Changes: character readings and 2–4 character words were extracted from
+jyut6ping3.chars.dict.yaml and jyut6ping3.words.dict.yaml. Frequencies come
+from essay-cantonese.txt. A short list of orthographic variants (為/爲, 裡/裏,
+著/着, 羣/群, 綫/線, 峯/峰, 眾/衆, 說/説, 戶/户, 啟/啓, 恆/恒, 溫/温, 哋/地)
+is used only when looking up a frequency. The displayed spelling stays the
+dictionary form. Words not in the essay list have frequency 0.
+
+words.hk dictionary data was not included. Its licence is the Non-Commercial
+Open Data License / CC BY-NC. jyut6ping3.maps (ODbL) was not included.
+
+The application code in this repository is separate from the lexicon.
