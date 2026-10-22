@@ -59,6 +59,7 @@ export function slotsForTrackChoice(
 /**
  * Build sung slots from a melody.
  * Typed text stays on the same sung-note index.
+ * TODO: give each slot a stable id so inserting a note earlier keeps characters and overrides on the same note. Index alignment shifts them.
  * `bar` comes from the new note. The previous line's bars are not kept.
  * Hand-edited codes stay too, unless `keepOverrides` is false (a fresh import).
  */
