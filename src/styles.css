@@ -309,6 +309,81 @@ fieldset label { flex-direction: row; align-items: center; }
 
 .suggest li span { color: #6d6256; font-size: 0.8rem; }
 
+.app.library-view {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 760px;
+}
+
+.library {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.search input { width: 100%; }
+
+.song-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.song-card h2 { font-size: 1.25rem; }
+
+.meta, .preview { margin: 0.25rem 0; }
+
+.preview { font-size: 1.05rem; }
+
+button.text-link {
+  background: none;
+  color: #5c5146;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.card-actions, .confirm, .rename-row, .create-song {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: end;
+  margin-top: 0.55rem;
+}
+
+.rename-row label { flex: 1; min-width: 10rem; }
+
+button.ghost {
+  background: transparent;
+  color: #241c15;
+  border: 1px solid #e3d5c3;
+}
+
+button.danger { background: #9f1239; }
+
+.confirm {
+  background: #fff5f5;
+  border: 1px solid #f0c9c9;
+  border-radius: 12px;
+  padding: 0.7rem;
+}
+
+.confirm p { margin: 0 0 0.5rem; }
+
+.empty {
+  text-align: center;
+  padding: 2.2rem 1rem;
+}
+
+.empty h2 { font-size: 1.4rem; margin-bottom: 0.35rem; }
+
+.empty button { margin-top: 0.8rem; }
+
 @media (max-width: 860px) {
   .app { grid-template-columns: 1fr; }
   .suggest { position: static; max-height: none; }

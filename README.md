@@ -35,7 +35,7 @@ The lyric editor is one sentence, not a grid of cards. Syllables sit inline and 
 
 The code is a menu of 0, 2, 4, and 3. Changing it stores a hand edit, marked 改 with a dashed underline. Editing the 簡譜 re-parses the melody and keeps those edits on the same sung-note index, along with the characters already typed. A fresh import clears the edits: 載入例句, uploading a MIDI file, or switching MIDI track. 還原聲調碼 clears them too, and choosing the mapped code again clears that one syllable. Mismatch flags and the suggestion list use the code on screen, hand edit or mapped.
 
-Hand edits follow the sung-note index. Inserting a note at the front shifts which syllable they sit on, the same way typed characters do.
+Hand edits follow the note. Re-parsing the 簡譜 lines the old syllables up with notes that still have the same pitch, spelling, and duration, and keeps each syllable's id. Adding a note at the front leaves the typed characters and hand edits on the notes they were on. A fresh import still follows the sung-note index and clears hand edits.
 
 ## 0243 rules
 
@@ -93,14 +93,22 @@ Not used:
 - `jyut6ping3.maps` (ODbL).
 - 0243.hk. Nothing in this project calls or scrapes it.
 
-## Saving
+## Song library
 
-Songs are stored in `localStorage` under `cantolyrics.songs.v1`. Export writes a `.txt` file: one line per bar, characters separated by spaces, □ for an empty slot, ～ appended for a melisma.
+The app opens on 歌曲庫. Each card shows the title, the local updated time, and a short lyric preview (typed characters, or the source lyric when nothing is typed yet). Search matches the title, the source lyric, and characters in the slots.
+
+An empty library has one 開新歌 button, which opens a blank song. Once any song exists, that button is gone. 新歌 is a text link: type a title, then 建立. The first tap does not add a song. 開啟 opens a song. 改名 renames it. 刪除 asks 確定刪除 before removing it. 返回歌庫 leaves the editor. Edits auto-save in the open song, and leaving the editor saves again. Saving one song does not replace the others.
+
+Songs stay in `localStorage` under `cantolyrics.songs.v1`. M1 already stored an array there, so those songs show up in the library. If that key holds one song object instead of an array, the first read wraps it into the library and writes the array back. A full disk throws a readable error and leaves the previous songs in place. There is still no account and no server.
+
+Export writes a `.txt` file: one line per bar, characters separated by spaces, □ for an empty slot, ～ appended for a melisma.
 
 ## Known limitations
 
 - One scaffold per phrase. No 節點斷開, no alternate fillings, no 同向 slider. 外張 only shows up as a gap cost (0 and 3 can stretch, but they still pay for the semitones). Hand-editing a code is the way to force another filling.
-- Hand edits are stored per sung-note index. They survive 簡譜 edits and are dropped on a new melody import.
+- Hand edits survive 簡譜 edits when the note's pitch, spelling, and duration are unchanged, and are dropped on a new melody import. A fresh import still lines characters up by sung-note index.
+- TODO: clear the MIDI import backup only after a slot is actually edited. Handlers still call `dropImportedLine` up front. The backup is no longer written inside the `setSlots` updater.
+- A MIDI file with no melody track clears the lyric line and shows「檔案入面冇旋律音」.
 - No 六聲 or 九聲.
 - 變調 is honoured only when the lexicon lists it as its own reading.
 - Rising tones may fit an extra code. That is more permissive than “陰上 = 三 only”.

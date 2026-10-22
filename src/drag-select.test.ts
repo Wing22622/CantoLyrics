@@ -12,6 +12,7 @@ import type { LyricSlot } from "./slots";
 
 function slot(label: string): LyricSlot {
   return {
+    id: label,
     pitch: 60,
     beats: 1,
     label,

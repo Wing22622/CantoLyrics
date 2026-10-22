@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { alignSources, alignmentNote, toggleMelisma } from "./align";
+import { CreateSongPrompt, LibraryView } from "./components/LibraryView";
 import { SuggestPanel } from "./components/SuggestPanel";
 import { SlotRow, type Slot } from "./components/SlotRow";
 import { EXAMPLE_JIANPU, EXAMPLE_LYRICS, EXAMPLE_TITLE } from "./example";
@@ -9,7 +10,7 @@ import { loadLexicon, type Lexicon } from "./lexicon";
 import { midiNoteName, parseMidi, type MidiTrack } from "./midi";
 import { splitSyllables } from "./syllables";
 import { clearOverrides, effectiveCode, slotsForTrackChoice, slotsFromNotes, withCode, type IncomingNote } from "./slots";
-import { deleteSong, listSongs, saveSong, type StoredSong } from "./storage";
+import { blankSong, deleteSong, listSongs, renameSong, saveSong, type StoredSong } from "./storage";
 import type { Code0243 } from "./tone-0243";
 import type { WordEntry } from "./suggest";
 
@@ -52,7 +53,43 @@ function emptyRun(slots: Slot[], selection: number[]): number[] | null {
   return sorted;
 }
 
+interface Draft {
+  songId: string | null;
+  title: string;
+  jianpu: string;
+  source: string;
+  slots: Slot[];
+}
+
+function toStored(draft: Draft): StoredSong | null {
+  if (!draft.songId) return null;
+  return {
+    id: draft.songId,
+    title: draft.title.trim() || "未命名",
+    updatedAt: Date.now(),
+    jianpu: draft.jianpu,
+    sourceLyrics: draft.source,
+    slots: draft.slots,
+  };
+}
+
+function contentKey(song: StoredSong): string {
+  return JSON.stringify({
+    id: song.id,
+    title: song.title,
+    jianpu: song.jianpu,
+    sourceLyrics: song.sourceLyrics,
+    slots: song.slots,
+  });
+}
+
+function storageMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "儲存唔到";
+}
+
 export function App() {
+  const [view, setView] = useState<"library" | "editor">("library");
+  const [query, setQuery] = useState("");
   const [title, setTitle] = useState("");
   const [jianpu, setJianpu] = useState("");
   const [source, setSource] = useState("");
@@ -68,13 +105,49 @@ export function App() {
   const [lexiconError, setLexiconError] = useState("");
   const [saved, setSaved] = useState<StoredSong[]>([]);
   const [songId, setSongId] = useState<string | null>(null);
-  const [pickedSave, setPickedSave] = useState("");
+  const [storageError, setStorageError] = useState("");
+  const [creating, setCreating] = useState(false);
   const anchor = useRef(0);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const lineBeforeImport = useRef<Slot[] | null>(null);
+  const slotsRef = useRef<Slot[]>([]);
+  const savedSnapshot = useRef("");
+  const draftRef = useRef<Draft>({ songId: null, title: "", jianpu: "", source: "", slots: [] });
+  slotsRef.current = slots;
+  draftRef.current = { songId, title, jianpu, source, slots };
 
   function dropImportedLine() {
     lineBeforeImport.current = null;
+  }
+
+  function remember(song: StoredSong) {
+    savedSnapshot.current = contentKey(song);
+  }
+
+  function dirty(): boolean {
+    const song = toStored(draftRef.current);
+    if (!song) return false;
+    return contentKey(song) !== savedSnapshot.current;
+  }
+
+  function persistDraft(): StoredSong[] {
+    const song = toStored(draftRef.current);
+    if (!song) return listSongs();
+    const list = saveSong(song);
+    remember(song);
+    return list;
+  }
+
+  function flush(): boolean {
+    if (!dirty()) return true;
+    try {
+      setSaved(persistDraft());
+      setStorageError("");
+      return true;
+    } catch (error) {
+      setStorageError(storageMessage(error));
+      return false;
+    }
   }
 
   useEffect(() => {
@@ -85,6 +158,84 @@ export function App() {
       });
     setSaved(listSongs());
   }, []);
+
+  useEffect(() => {
+    if (view !== "editor" || !songId) return;
+    const timer = window.setTimeout(() => {
+      if (!dirty()) return;
+      try {
+        setSaved(persistDraft());
+        setStorageError("");
+      } catch (error) {
+        setStorageError(storageMessage(error));
+      }
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [view, songId, title, jianpu, source, slots]);
+
+  function openSong(song: StoredSong) {
+    dropImportedLine();
+    remember(song);
+    setSongId(song.id);
+    setTitle(song.title);
+    setJianpu(song.jianpu);
+    setSource(song.sourceLyrics);
+    setSlots(song.slots);
+    setMode(song.jianpu.trim() ? "jianpu" : song.slots.length > 0 ? "midi" : "jianpu");
+    setTracks([]);
+    setTrackIndex(0);
+    setTonic("C");
+    setSelection([]);
+    setWarnings([]);
+    setNote("");
+    setView("editor");
+  }
+
+  function onCreate(title?: string) {
+    if (view === "editor" && !flush()) return;
+    const created = blankSong(title ?? "未命名");
+    try {
+      setSaved(saveSong(created));
+      setStorageError("");
+    } catch (error) {
+      setStorageError(storageMessage(error));
+      return;
+    }
+    openSong(created);
+  }
+
+  function onRename(id: string, nextTitle: string) {
+    try {
+      const list = renameSong(id, nextTitle);
+      setSaved(list);
+      const renamed = list.find((song) => song.id === id);
+      if (renamed && songId === id) {
+        setTitle(renamed.title);
+        remember({ ...toStored(draftRef.current)!, title: renamed.title });
+      }
+      setStorageError("");
+    } catch (error) {
+      setStorageError(storageMessage(error));
+    }
+  }
+
+  function onDelete(id: string) {
+    try {
+      setSaved(deleteSong(id));
+      if (songId === id) {
+        setSongId(null);
+        savedSnapshot.current = "";
+      }
+      setStorageError("");
+    } catch (error) {
+      setStorageError(storageMessage(error));
+    }
+  }
+
+  function backToLibrary() {
+    if (!flush()) return;
+    setView("library");
+  }
 
   function onJianpu(text: string) {
     dropImportedLine();
@@ -138,26 +289,31 @@ export function App() {
     if (!file) return;
     try {
       const parsed = parseMidi(await file.arrayBuffer());
-      setTracks(parsed.tracks);
       setWarnings(parsed.warnings);
+      setTracks(parsed.tracks);
       setTrackIndex(0);
-      if (parsed.tracks.length > 0) {
-        setMode("midi");
-        setSlots((prev) => {
-          lineBeforeImport.current = prev;
-          return slotsForTrackChoice(fromTrack(parsed.tracks[0]), prev, null);
-        });
+      if (parsed.tracks.length === 0) {
+        dropImportedLine();
+        setMode("jianpu");
+        setSlots([]);
         setSelection([]);
+        return;
       }
+      lineBeforeImport.current = slotsRef.current;
+      setMode("midi");
+      setSlots(slotsForTrackChoice(fromTrack(parsed.tracks[0]), slotsRef.current, null));
+      setSelection([]);
     } catch (error) {
       setWarnings([error instanceof Error ? error.message : "MIDI 讀唔到"]);
     }
   }
 
   function chooseTrack(index: number) {
+    const track = tracks[index];
+    if (!track) return;
     setTrackIndex(index);
     setMode("midi");
-    setSlots((prev) => slotsForTrackChoice(fromTrack(tracks[index]), prev, lineBeforeImport.current));
+    setSlots(slotsForTrackChoice(fromTrack(track), slotsRef.current, lineBeforeImport.current));
     setSelection([]);
   }
 
@@ -255,58 +411,8 @@ export function App() {
   }
 
   function onSave() {
-    const id = songId ?? crypto.randomUUID();
-    const song: StoredSong = {
-      id,
-      title: title.trim() || "未命名",
-      updatedAt: Date.now(),
-      jianpu,
-      sourceLyrics: source,
-      slots,
-    };
-    setSongId(id);
-    const list = saveSong(song);
-    setSaved(list);
-    setPickedSave(id);
+    if (!flush()) return;
     setNote("儲存咗喺呢個瀏覽器。");
-  }
-
-  function onLoad() {
-    dropImportedLine();
-    const song = saved.find((item) => item.id === pickedSave);
-    if (!song) return;
-    setSongId(song.id);
-    setTitle(song.title);
-    setJianpu(song.jianpu);
-    setSource(song.sourceLyrics);
-    setSlots(song.slots);
-    setMode(song.jianpu.trim() ? "jianpu" : "midi");
-    setSelection([]);
-    setWarnings([]);
-    setNote(`載入咗「${song.title}」。`);
-  }
-
-  function onDelete() {
-    if (!pickedSave) return;
-    const list = deleteSong(pickedSave);
-    setSaved(list);
-    if (songId === pickedSave) setSongId(null);
-    setPickedSave(list[0]?.id ?? "");
-  }
-
-  function onNew() {
-    dropImportedLine();
-    setSongId(null);
-    setTitle("");
-    setJianpu("");
-    setSource("");
-    setSlots([]);
-    setSelection([]);
-    setWarnings([]);
-    setNote("");
-    setMode("jianpu");
-    setTracks([]);
-    setTonic("C");
   }
 
   function onExport() {
@@ -324,6 +430,23 @@ export function App() {
   const suggestCodes: Code0243[] = run ? run.map((index) => effectiveCode(slots[index])) : [];
   const handEdited = slots.some((slot) => slot.override != null);
 
+  if (view === "library") {
+    return (
+      <div className="app library-view">
+        <LibraryView
+          songs={saved}
+          query={query}
+          storageError={storageError}
+          onQuery={setQuery}
+          onCreate={onCreate}
+          onOpen={openSong}
+          onRename={onRename}
+          onDelete={onDelete}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <div className="main">
@@ -333,13 +456,26 @@ export function App() {
             <h1>粵語填詞</h1>
           </div>
           <div className="song-actions">
+            <button type="button" className="ghost" onClick={backToLibrary}>
+              返回歌庫
+            </button>
             <label>
               歌名
               <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="未命名" />
             </label>
-            <button type="button" onClick={onNew}>
-              新歌
-            </button>
+            {creating ? (
+              <CreateSongPrompt
+                onConfirm={(next) => {
+                  setCreating(false);
+                  onCreate(next);
+                }}
+                onCancel={() => setCreating(false)}
+              />
+            ) : (
+              <button type="button" className="text-link" onClick={() => setCreating(true)}>
+                新歌
+              </button>
+            )}
             <button type="button" onClick={onSave}>
               儲存
             </button>
@@ -348,26 +484,8 @@ export function App() {
             </button>
           </div>
         </header>
-
-        <div className="load-row">
-          <label>
-            載入已儲存
-            <select value={pickedSave} onChange={(event) => setPickedSave(event.target.value)}>
-              <option value="">揀一首</option>
-              {saved.map((song) => (
-                <option key={song.id} value={song.id}>
-                  {song.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" onClick={onLoad} disabled={!pickedSave}>
-            載入
-          </button>
-          <button type="button" onClick={onDelete} disabled={!pickedSave}>
-            刪除
-          </button>
-        </div>
+        <p className="hint">改動會自動儲存喺呢個瀏覽器。返回歌庫之前都會再儲存一次。</p>
+        {storageError ? <p className="warnings">{storageError}</p> : null}
 
         <section className="panel">
           <div className="panel-head">

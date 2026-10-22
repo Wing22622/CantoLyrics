@@ -1,6 +1,8 @@
 import { mapMelody, type Code0243 } from "./tone-0243";
 
 export interface LyricSlot {
+  /** Stays with this syllable when the melody is re-parsed. */
+  id: string;
   pitch: number;
   beats: number;
   label: string;
@@ -56,11 +58,77 @@ export function slotsForTrackChoice(
   return slotsFromNotes(notes, lineBeforeImport ?? current, false);
 }
 
+function newSlotId(): string {
+  return crypto.randomUUID();
+}
+
+function noteKey(note: { pitch: number; label: string; beats: number }): string {
+  return `${note.pitch}|${note.label}|${note.beats}`;
+}
+
+/** Where `prev` sits as one contiguous block inside `next`. */
+function contiguousStart(prevKeys: readonly string[], nextKeys: readonly string[]): number | null {
+  if (prevKeys.length === 0) return 0;
+  const starts: number[] = [];
+  for (let start = 0; start + prevKeys.length <= nextKeys.length; start++) {
+    const same = prevKeys.every((key, offset) => nextKeys[start + offset] === key);
+    if (same) starts.push(start);
+  }
+  return starts.length === 1 ? starts[0] : null;
+}
+
+/**
+ * Previous sung slots lined up with the new sung notes.
+ * A block of identical notes stays together, so a note added at the front
+ * does not take the first character. Otherwise match the longest common
+ * subsequence, still in order. A fresh import passes `keepOverrides` false
+ * and keeps using the sung-note index instead.
+ */
+function alignKeptSlots(
+  prev: readonly LyricSlot[],
+  sung: readonly { pitch: number; label: string; beats: number }[],
+): (LyricSlot | undefined)[] {
+  const prevKeys = prev.map((slot) => noteKey(slot));
+  const nextKeys = sung.map((note) => noteKey(note));
+  const block = contiguousStart(prevKeys, nextKeys);
+  if (block != null) {
+    return nextKeys.map((_, index) => {
+      const prevIndex = index - block;
+      return prevIndex >= 0 && prevIndex < prev.length ? prev[prevIndex] : undefined;
+    });
+  }
+  const n = prevKeys.length;
+  const m = nextKeys.length;
+  const score: number[][] = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      score[i][j] = prevKeys[i] === nextKeys[j]
+        ? score[i + 1][j + 1] + 1
+        : Math.max(score[i + 1][j], score[i][j + 1]);
+    }
+  }
+  const matched: (LyricSlot | undefined)[] = Array(m).fill(undefined);
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (prevKeys[i] === nextKeys[j]) {
+      matched[j] = prev[i];
+      i += 1;
+      j += 1;
+    } else if (score[i + 1][j] >= score[i][j + 1]) {
+      i += 1;
+    } else {
+      j += 1;
+    }
+  }
+  return matched;
+}
+
 /**
  * Build sung slots from a melody.
- * Typed text stays on the same sung-note index.
- * `bar` comes from the new note. The previous line's bars are not kept.
- * Hand-edited codes stay too, unless `keepOverrides` is false (a fresh import).
+ * While hand edits are kept, typed text and overrides follow the same note
+ * (pitch, label, duration) and keep that slot's id. `bar` comes from the new note.
+ * A fresh import (`keepOverrides` false) still follows the sung-note index and drops overrides.
  */
 export function slotsFromNotes(
   notes: readonly IncomingNote[],
@@ -68,25 +136,29 @@ export function slotsFromNotes(
   keepOverrides: boolean,
 ): LyricSlot[] {
   const codes = mapMelody(notes.map((note) => ({ pitch: note.rest ? null : note.pitch })));
-  const next: LyricSlot[] = [];
+  const sung: { pitch: number; beats: number; label: string; bar: number; mapped: Code0243 }[] = [];
   notes.forEach((note, index) => {
     const mapped = codes[index];
     if (note.rest || mapped == null || note.pitch == null) return;
-    const old = prev[next.length];
-    next.push({
+    sung.push({ pitch: note.pitch, beats: note.beats, label: note.label, bar: note.bar, mapped });
+  });
+  const aligned = keepOverrides ? alignKeptSlots(prev, sung) : sung.map((_, index) => prev[index]);
+  return sung.map((note, index) => {
+    const old = aligned[index];
+    return {
+      id: old?.id ?? newSlotId(),
       pitch: note.pitch,
       beats: note.beats,
       label: note.label,
       bar: note.bar,
-      mapped,
+      mapped: note.mapped,
       override: keepOverrides ? (old?.override ?? null) : null,
       source: old?.source ?? "",
       melisma: old?.melisma ?? false,
       character: old?.character ?? "",
       reading: old?.reading ?? null,
-    });
+    };
   });
-  return next;
 }
 
 /** Accepts a current slot or an older save that only stored `code`. */
@@ -94,7 +166,9 @@ export function normalizeSlot(raw: unknown): LyricSlot {
   const slot = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const mapped = isCode(slot.mapped) ? slot.mapped : isCode(slot.code) ? slot.code : "4";
   const override = isCode(slot.override) ? slot.override : null;
+  const id = typeof slot.id === "string" && slot.id.trim() ? slot.id : newSlotId();
   return {
+    id,
     pitch: typeof slot.pitch === "number" ? slot.pitch : 60,
     beats: typeof slot.beats === "number" ? slot.beats : 1,
     label: typeof slot.label === "string" ? slot.label : "",
