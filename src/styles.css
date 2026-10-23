@@ -254,6 +254,17 @@ input[type="text"], input:not([type]), select, .song-actions input, .load-row se
 .reading.on { border-color: #1d4e89; background: #eef4fb; }
 .reading span { float: right; color: #6d6256; }
 
+.file-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem 1.2rem;
+  margin-top: 0.35rem;
+}
+
+.file-row .file { flex: 1 1 14rem; min-width: 0; }
+
+input[type="file"] { max-width: 100%; }
+
 fieldset {
   border: 1px solid #e3d5c3;
   border-radius: 10px;
@@ -387,4 +398,26 @@ button.danger { background: #9f1239; }
 @media (max-width: 860px) {
   .app { grid-template-columns: 1fr; }
   .suggest { position: static; max-height: none; }
+}
+
+@media (max-width: 480px) {
+  .app { padding: 0.7rem 0.65rem 1.4rem; }
+  h1 { font-size: 1.45rem; }
+  .top, .song-actions, .panel-head { align-items: stretch; }
+  .song-actions { flex-direction: column; }
+  .song-actions label,
+  .song-actions input,
+  .search input,
+  .create-song input,
+  .rename-row input { width: 100%; }
+  .song-actions > button:not(.text-link) { width: 100%; }
+  .panel { padding: 0.75rem 0.7rem 0.9rem; }
+  .file-row,
+  .create-song,
+  .rename-row,
+  .confirm,
+  .card-actions { flex-direction: column; align-items: stretch; }
+  .rename-row label { min-width: 0; width: 100%; }
+  .legend { gap: 0.25rem 0.55rem; }
+  .song-card, .preview, .panel h2 { overflow-wrap: anywhere; }
 }

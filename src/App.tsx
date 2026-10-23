@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { alignSources, alignmentNote, toggleMelisma } from "./align";
+import { clipSamples, decodeToMono } from "./audio-file";
+import { framesFromSamples, melodyFromFrames } from "./audio-melody";
 import { CreateSongPrompt, LibraryView } from "./components/LibraryView";
 import { SuggestPanel } from "./components/SuggestPanel";
 import { SlotRow, type Slot } from "./components/SlotRow";
 import { EXAMPLE_JIANPU, EXAMPLE_LYRICS, EXAMPLE_TITLE } from "./example";
 import { exportLyrics } from "./export-lyrics";
+import { importedLineAfterChange, slotChangeFor, type SlotWrite } from "./import-line";
 import { parseJianpu } from "./jianpu";
 import { loadLexicon, type Lexicon } from "./lexicon";
 import { midiNoteName, parseMidi, type MidiTrack } from "./midi";
@@ -13,6 +16,8 @@ import { clearOverrides, effectiveCode, slotsForTrackChoice, slotsFromNotes, wit
 import { blankSong, deleteSong, listSongs, renameSong, saveSong, type StoredSong } from "./storage";
 import type { Code0243 } from "./tone-0243";
 import type { WordEntry } from "./suggest";
+
+const AUDIO_RATE = 16000;
 
 function toSlots(notes: IncomingNote[], prev: Slot[], keepOverrides: boolean): Slot[] {
   return slotsFromNotes(notes, prev, keepOverrides);
@@ -93,10 +98,10 @@ export function App() {
   const [title, setTitle] = useState("");
   const [jianpu, setJianpu] = useState("");
   const [source, setSource] = useState("");
-  const [slots, setSlots] = useState<Slot[]>([]);
+  const [slots, setSlotsState] = useState<Slot[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [tonic, setTonic] = useState("C");
-  const [mode, setMode] = useState<"jianpu" | "midi">("jianpu");
+  const [mode, setMode] = useState<"jianpu" | "midi" | "audio">("jianpu");
   const [tracks, setTracks] = useState<MidiTrack[]>([]);
   const [trackIndex, setTrackIndex] = useState(0);
   const [note, setNote] = useState("");
@@ -110,14 +115,25 @@ export function App() {
   const anchor = useRef(0);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const lineBeforeImport = useRef<Slot[] | null>(null);
+  const slotChange = useRef(slotChangeFor("import"));
   const slotsRef = useRef<Slot[]>([]);
   const savedSnapshot = useRef("");
   const draftRef = useRef<Draft>({ songId: null, title: "", jianpu: "", source: "", slots: [] });
   slotsRef.current = slots;
   draftRef.current = { songId, title, jianpu, source, slots };
 
-  function dropImportedLine() {
-    lineBeforeImport.current = null;
+  useEffect(() => {
+    lineBeforeImport.current = importedLineAfterChange(lineBeforeImport.current, slotChange.current);
+  }, [slots]);
+
+  /**
+   * Every slot write comes through here.
+   * `edit` drops the import backup. Re-parse, track choice, and import do not.
+   */
+  function applySlots(write: SlotWrite, next: Slot[] | ((prev: Slot[]) => Slot[]), backup?: Slot[] | null) {
+    slotChange.current = slotChangeFor(write);
+    if (backup !== undefined) lineBeforeImport.current = backup;
+    setSlotsState(next);
   }
 
   function remember(song: StoredSong) {
@@ -174,13 +190,12 @@ export function App() {
   }, [view, songId, title, jianpu, source, slots]);
 
   function openSong(song: StoredSong) {
-    dropImportedLine();
     remember(song);
     setSongId(song.id);
     setTitle(song.title);
     setJianpu(song.jianpu);
     setSource(song.sourceLyrics);
-    setSlots(song.slots);
+    applySlots("edit", song.slots);
     setMode(song.jianpu.trim() ? "jianpu" : song.slots.length > 0 ? "midi" : "jianpu");
     setTracks([]);
     setTrackIndex(0);
@@ -238,20 +253,18 @@ export function App() {
   }
 
   function onJianpu(text: string) {
-    dropImportedLine();
     setJianpu(text);
     setMode("jianpu");
     const parsed = fromJianpu(text);
     setTonic(parsed.tonic);
     setWarnings(parsed.warnings);
-    setSlots((prev) => toSlots(parsed.notes, prev, true));
+    applySlots("reparse", (prev) => toSlots(parsed.notes, prev, true));
     setSelection([]);
   }
 
   function onAlign() {
-    dropImportedLine();
     const syllables = splitSyllables(source);
-    setSlots((prev) => {
+    applySlots("edit", (prev) => {
       const aligned = alignSources(prev, syllables);
       return prev.map((slot, index) => ({
         ...slot,
@@ -263,7 +276,6 @@ export function App() {
   }
 
   function loadExample() {
-    dropImportedLine();
     setTitle(EXAMPLE_TITLE);
     setSource(EXAMPLE_LYRICS);
     setJianpu(EXAMPLE_JIANPU);
@@ -274,7 +286,7 @@ export function App() {
     const syllables = splitSyllables(EXAMPLE_LYRICS);
     const base = toSlots(parsed.notes, [], false);
     const aligned = alignSources(base, syllables);
-    setSlots(
+    applySlots("edit", 
       base.map((slot, index) => ({
         ...slot,
         source: aligned[index].source,
@@ -293,18 +305,46 @@ export function App() {
       setTracks(parsed.tracks);
       setTrackIndex(0);
       if (parsed.tracks.length === 0) {
-        dropImportedLine();
         setMode("jianpu");
-        setSlots([]);
+        applySlots("edit", []);
         setSelection([]);
         return;
       }
-      lineBeforeImport.current = slotsRef.current;
       setMode("midi");
-      setSlots(slotsForTrackChoice(fromTrack(parsed.tracks[0]), slotsRef.current, null));
+      applySlots("import", slotsForTrackChoice(fromTrack(parsed.tracks[0]), slotsRef.current, null), slotsRef.current);
       setSelection([]);
     } catch (error) {
       setWarnings([error instanceof Error ? error.message : "MIDI 讀唔到"]);
+    }
+  }
+
+  async function onAudioFile(file: File | null) {
+    if (!file) return;
+    try {
+      const decoded = await decodeToMono(await file.arrayBuffer(), AUDIO_RATE);
+      const samples = clipSamples(decoded, AUDIO_RATE);
+      const notes = melodyFromFrames(framesFromSamples(samples, AUDIO_RATE));
+      const clipped = samples.length < decoded.length;
+      if (notes.length === 0) {
+        setTracks([]);
+        setMode("jianpu");
+        applySlots("edit", []);
+        setSelection([]);
+        setWarnings(["呢段錄音搵唔到清楚嘅旋律"]);
+        return;
+      }
+      setTracks([]);
+      setTrackIndex(0);
+      setMode("audio");
+      applySlots("import", slotsForTrackChoice(notes, slotsRef.current, null), slotsRef.current);
+      setSelection([]);
+      setWarnings(clipped ? ["只係分析咗頭 90 秒。"] : []);
+    } catch {
+      setTracks([]);
+      setMode("jianpu");
+      applySlots("edit", []);
+      setSelection([]);
+      setWarnings(["呢個音訊檔讀唔到"]);
     }
   }
 
@@ -313,7 +353,7 @@ export function App() {
     if (!track) return;
     setTrackIndex(index);
     setMode("midi");
-    setSlots(slotsForTrackChoice(fromTrack(track), slotsRef.current, lineBeforeImport.current));
+    applySlots("track", slotsForTrackChoice(fromTrack(track), slotsRef.current, lineBeforeImport.current));
     setSelection([]);
   }
 
@@ -331,16 +371,15 @@ export function App() {
   }
 
   function onCommit(index: number, raw: string) {
-    dropImportedLine();
     const chars = Array.from(raw.replace(/\s+/g, ""));
     if (chars.length === 0) {
-      setSlots((prev) =>
+      applySlots("edit", (prev) =>
         prev.map((slot, i) => (i === index ? { ...slot, character: "", reading: null } : slot)),
       );
       return;
     }
     let last = index;
-    setSlots((prev) => {
+    applySlots("edit", (prev) => {
       const next = prev.map((slot) => ({ ...slot }));
       let cursor = index;
       for (const char of chars) {
@@ -356,30 +395,25 @@ export function App() {
   }
 
   function onCode(index: number, code: Code0243) {
-    dropImportedLine();
-    setSlots((prev) => prev.map((slot, i) => (i === index ? withCode(slot, code) : slot)));
+    applySlots("edit", (prev) => prev.map((slot, i) => (i === index ? withCode(slot, code) : slot)));
   }
 
   function onClearCodes() {
-    dropImportedLine();
-    setSlots((prev) => clearOverrides(prev));
+    applySlots("edit", (prev) => clearOverrides(prev));
   }
 
   function onReading(index: number, jyutping: string) {
-    dropImportedLine();
-    setSlots((prev) =>
+    applySlots("edit", (prev) =>
       prev.map((slot, i) => (i === index ? { ...slot, reading: jyutping } : slot)),
     );
   }
 
   function onSource(index: number, value: string) {
-    dropImportedLine();
-    setSlots((prev) => prev.map((slot, i) => (i === index ? { ...slot, source: value } : slot)));
+    applySlots("edit", (prev) => prev.map((slot, i) => (i === index ? { ...slot, source: value } : slot)));
   }
 
   function onMelisma(index: number) {
-    dropImportedLine();
-    setSlots((prev) => {
+    applySlots("edit", (prev) => {
       const aligned = toggleMelisma(prev, index);
       return prev.map((slot, i) => ({
         ...slot,
@@ -393,10 +427,9 @@ export function App() {
   }
 
   function onPick(word: WordEntry) {
-    dropImportedLine();
     const run = emptyRun(slots, selection);
     if (!run) return;
-    setSlots((prev) => {
+    applySlots("edit", (prev) => {
       const next = prev.map((slot) => ({ ...slot }));
       run.slice(0, word.text.length).forEach((slotIndex, offset) => {
         next[slotIndex] = {
@@ -508,18 +541,35 @@ export function App() {
             1–7 係 do–ti，預設 1=C。高音加 '，低音加 , 或者寫喺數字前面加點。- 延長一拍，_ 或 /
             係半拍，0 係休止，| 係小節。而家調號 1={tonic}。
             {mode === "midi" ? " 而家顯示緊 MIDI 旋律；改上面嘅簡譜就會換返。" : ""}
+            {mode === "audio" ? " 而家顯示緊由錄音抽出嘅旋律；改上面嘅簡譜就會換返。" : ""}
           </p>
-          <label className="file">
-            上載 MIDI 檔
-            <input
-              type="file"
-              accept=".mid,.midi,audio/midi"
-              onChange={(event) => {
-                void onMidiFile(event.target.files?.[0] ?? null);
-                event.target.value = "";
-              }}
-            />
-          </label>
+          <div className="file-row">
+            <label className="file">
+              上載 MIDI 檔
+              <input
+                type="file"
+                accept=".mid,.midi,audio/midi"
+                onChange={(event) => {
+                  void onMidiFile(event.target.files?.[0] ?? null);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            <label className="file">
+              上載錄音
+              <input
+                type="file"
+                accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac"
+                onChange={(event) => {
+                  void onAudioFile(event.target.files?.[0] ?? null);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+          <p className="hint">
+            錄音可以係 MP3、WAV 或者其他常見音訊。抽出旋律會清走手改聲調碼，已打嘅字會跟住音序留低。要清楚嘅單旋律，和弦同鼓會唔準。
+          </p>
           {tracks.length > 1 ? (
             <fieldset>
               <legend>揀音軌</legend>
@@ -584,10 +634,10 @@ export function App() {
             </button>
           </div>
           <p className="hint">
-            一行歌詞，每個音一個字。撳個聲調碼可以改；改過會標「改」，再改簡譜都唔會覆寫。重新載入例句、上載 MIDI 或者撳「還原聲調碼」先至用返計算出嚟嘅碼。撳住拖或者按住 Shift 可以連選空格。
+            一行歌詞，每個音一個字。撳個聲調碼可以改；改過會標「改」，再改簡譜都唔會覆寫。重新載入例句、上載 MIDI、上載錄音，或者撳「還原聲調碼」先至用返計算出嚟嘅碼。撳住拖或者按住 Shift 可以連選空格。
           </p>
           {slots.length === 0 ? (
-            <p className="hint">未有旋律。貼上簡譜或者上載 MIDI 之後，呢度會出一行歌詞。</p>
+            <p className="hint">未有旋律。貼上簡譜、上載 MIDI 或者上載錄音之後，呢度會出一行歌詞。</p>
           ) : (
             <SlotRow
               slots={slots}
