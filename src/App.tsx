@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { alignSources, alignmentNote, toggleMelisma } from "./align";
+import { alignLyric, alignmentNote, toggleMelisma } from "./align";
 import { clipSamples, decodeToMono } from "./audio-file";
 import { framesFromSamples, melodyFromFrames } from "./audio-melody";
 import { CreateSongPrompt, LibraryView } from "./components/LibraryView";
@@ -11,7 +11,7 @@ import { importedLineAfterChange, slotChangeFor, type SlotWrite } from "./import
 import { parseJianpu } from "./jianpu";
 import { loadLexicon, type Lexicon } from "./lexicon";
 import { midiNoteName, parseMidi, type MidiTrack } from "./midi";
-import { splitSyllables } from "./syllables";
+import { inferLyricLang, segmentLyric } from "./syllables";
 import { clearOverrides, effectiveCode, slotsForTrackChoice, slotsFromNotes, withCode, type IncomingNote } from "./slots";
 import { blankSong, deleteSong, listSongs, renameSong, saveSong, type StoredSong } from "./storage";
 import type { Code0243 } from "./tone-0243";
@@ -263,15 +263,9 @@ export function App() {
   }
 
   function onAlign() {
-    const syllables = splitSyllables(source);
-    applySlots("edit", (prev) => {
-      const aligned = alignSources(prev, syllables);
-      return prev.map((slot, index) => ({
-        ...slot,
-        source: aligned[index].source,
-        melisma: false,
-      }));
-    });
+    const lang = inferLyricLang(source);
+    const syllables = segmentLyric(source, lang);
+    applySlots("edit", (prev) => alignLyric(prev, source, lang));
     setNote(alignmentNote(syllables.length, slots.length));
   }
 
@@ -283,16 +277,8 @@ export function App() {
     const parsed = fromJianpu(EXAMPLE_JIANPU);
     setTonic(parsed.tonic);
     setWarnings(parsed.warnings);
-    const syllables = splitSyllables(EXAMPLE_LYRICS);
     const base = toSlots(parsed.notes, [], false);
-    const aligned = alignSources(base, syllables);
-    applySlots("edit", 
-      base.map((slot, index) => ({
-        ...slot,
-        source: aligned[index].source,
-        melisma: false,
-      })),
-    );
+    applySlots("edit", alignLyric(base, EXAMPLE_LYRICS, inferLyricLang(EXAMPLE_LYRICS)));
     setSelection([]);
     setNote("");
   }
