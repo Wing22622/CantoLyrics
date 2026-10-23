@@ -1,6 +1,28 @@
+import { segmentLyric, type LyricLang } from "./syllables";
+
 export interface AlignSlot {
   source: string;
   melisma: boolean;
+}
+
+/**
+ * Place one segmented syllable on each slot.
+ * The result is the same length as `slots`. Extra syllables are dropped.
+ * Slots with no syllable are left empty — nothing is joined or stretched to force a fit.
+ * `id` and every other field (typed character, reading, hand-edited code) stay.
+ * Melisma is cleared: this is a fresh one-syllable-per-note pass.
+ */
+export function alignLyric<T extends AlignSlot>(
+  slots: readonly T[],
+  lyric: string,
+  lang: LyricLang,
+): T[] {
+  const chars = segmentLyric(lyric, lang);
+  return slots.map((slot, index) => ({
+    ...slot,
+    source: chars[index] ?? "",
+    melisma: false,
+  }));
 }
 
 /** Shown when the source syllable count and the sung-note count differ. */
