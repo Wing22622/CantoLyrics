@@ -93,7 +93,6 @@ function storageMessage(error: unknown): string {
   return error instanceof Error ? error.message : "儲存唔到";
 }
 
-// Do not collapse the four variants, because `{ kind: mode }` must stay a type error.
 type MelodySurface =
   | { kind: "chooser" }
   | { kind: "jianpu" }
