@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   mapLyricDigits,
+  reconcileChoices,
   UNKNOWN_DIGIT,
   type LyricCharToken,
   type LyricReading,
@@ -15,7 +16,7 @@ interface LyricDigitsPanelProps {
 
 export function LyricDigitsPanel({ readingsFor, lexiconReady, lexiconError = "" }: LyricDigitsPanelProps) {
   const [text, setText] = useState("");
-  const [choices, setChoices] = useState<ReadingChoice[]>([]);
+  const [choices, setChoices] = useState<readonly ReadingChoice[]>([]);
   const result = lexiconReady ? mapLyricDigits(text, readingsFor, choices) : null;
 
   function onChoose(token: LyricCharToken, jyutping: string) {
@@ -37,7 +38,11 @@ export function LyricDigitsPanel({ readingsFor, lexiconReady, lexiconError = "" 
           rows={2}
           spellCheck={false}
           placeholder="陳大文"
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            const next = event.target.value;
+            setChoices((current) => reconcileChoices(text, next, current));
+            setText(next);
+          }}
         />
       </label>
       <p className="hint">

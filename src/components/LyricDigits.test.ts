@@ -75,6 +75,37 @@ describe("LyricDigitsPanel", () => {
     expect(alternate.getAttribute("aria-pressed")).toBe("true");
   });
 
+  function pressReading(node: ParentNode, cellIndex: number, jyutping: string) {
+    const cells = [...node.querySelectorAll(".lyric-cell")];
+    const button = [...cells[cellIndex].querySelectorAll("button")].find((item) => item.textContent?.startsWith(jyutping));
+    if (!button) throw new Error(`missing ${jyutping} in cell ${cellIndex}`);
+    act(() => {
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  }
+
+  it("does not leave a chosen reading on the wrong character after insert or delete", () => {
+    const node = render();
+    typePhrase(node, "人人");
+    pressReading(node, 1, "jan2");
+    expect(node.querySelector(".lyric-digits")?.textContent).toBe("03");
+
+    typePhrase(node, "人人人");
+    expect(node.querySelector(".lyric-digits")?.textContent).toBe("000");
+    const afterInsert = [...node.querySelectorAll("button[aria-pressed='true']")].map((button) => button.textContent ?? "");
+    expect(afterInsert).toHaveLength(3);
+    expect(afterInsert.every((label) => label.includes("jan4") && !label.includes("jan2"))).toBe(true);
+
+    typePhrase(node, "人人");
+    pressReading(node, 0, "jan2");
+    expect(node.querySelector(".lyric-digits")?.textContent).toBe("30");
+    typePhrase(node, "人");
+    expect(node.querySelector(".lyric-digits")?.textContent).toBe("0");
+    const afterDelete = node.querySelector("button[aria-pressed='true']")?.textContent ?? "";
+    expect(afterDelete.includes("jan4")).toBe(true);
+    expect(afterDelete.includes("jan2")).toBe(false);
+  });
+
   it("shows a placeholder for an unknown character and skips Latin", () => {
     const node = render();
     typePhrase(node, "人𠀀，ok 笑");

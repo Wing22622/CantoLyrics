@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { buildLexicon } from "./lexicon";
-import { mapLyricDigits, UNKNOWN_DIGIT, type LyricReading, type ReadingChoice } from "./lyric-0243";
+import {
+  mapLyricDigits,
+  reconcileChoices,
+  UNKNOWN_DIGIT,
+  type LyricReading,
+  type ReadingChoice,
+} from "./lyric-0243";
 
 const lexicon = buildLexicon(JSON.parse(readFileSync(new URL("../public/lexicon.json", import.meta.url), "utf8")));
 
@@ -102,6 +108,42 @@ describe("mapLyricDigits", () => {
     const readingsFor = vi.fn(lookup);
     mapLyricDigits("", readingsFor);
     expect(readingsFor).not.toHaveBeenCalled();
+  });
+});
+
+describe("reconcileChoices", () => {
+  it("drops a pick that an insert or delete could move onto another copy", () => {
+    const inserted = reconcileChoices("人人", "人人人", [choice(1, "人", "jan2")]);
+    expect(inserted).toEqual([]);
+    expect(mapLyricDigits("人人人", lookup, inserted).digits).toBe("000");
+    expect(mapLyricDigits("人人人", lookup, inserted).tokens.filter((token) => token.kind === "char").map((token) => token.jyutping)).toEqual([
+      "jan4",
+      "jan4",
+      "jan4",
+    ]);
+
+    const deleted = reconcileChoices("人人", "人", [choice(0, "人", "jan2")]);
+    expect(deleted).toEqual([]);
+    const survivor = mapLyricDigits("人", lookup, deleted);
+    expect(survivor.digits).toBe("0");
+    expect(survivor.tokens[0]).toMatchObject({ char: "人", jyutping: "jan4" });
+  });
+
+  it("keeps a pick on the same occurrence when the edit cannot trade two copies", () => {
+    expect(reconcileChoices("人笑", "人，笑", [choice(0, "人", "jan2")])).toEqual([choice(0, "人", "jan2")]);
+    expect(mapLyricDigits("人，笑", lookup, reconcileChoices("人笑", "人，笑", [choice(0, "人", "jan2")])).digits).toBe(
+      "3 4",
+    );
+
+    const shifted = reconcileChoices("人人", "人笑人", [choice(1, "人", "jan2")]);
+    expect(shifted).toEqual([choice(2, "人", "jan2")]);
+    const phrase = mapLyricDigits("人笑人", lookup, shifted);
+    expect(phrase.digits).toBe("043");
+    expect(phrase.tokens.filter((token) => token.kind === "char").map((token) => token.jyutping)).toEqual([
+      "jan4",
+      "siu3",
+      "jan2",
+    ]);
   });
 });
 
