@@ -3,6 +3,7 @@ import { alignLyric, alignmentNote, toggleMelisma } from "./align";
 import { clipSamples, decodeToMono } from "./audio-file";
 import { framesFromSamples, melodyFromFrames } from "./audio-melody";
 import { CreateSongPrompt, LibraryView } from "./components/LibraryView";
+import { LyricDigitsPanel } from "./components/LyricDigits";
 import { SuggestPanel } from "./components/SuggestPanel";
 import { SlotRow, type Slot } from "./components/SlotRow";
 import { EXAMPLE_JIANPU, EXAMPLE_LYRICS, EXAMPLE_TITLE } from "./example";
@@ -604,6 +605,12 @@ export function App() {
           </p>
           {note ? <p className="note">{note}</p> : null}
         </section>
+
+        <LyricDigitsPanel
+          readingsFor={(char) => lexicon?.readingsFor(char) ?? []}
+          lexiconReady={lexicon != null}
+          lexiconError={lexiconError}
+        />
 
         <section className="panel">
           <div className="panel-head">
