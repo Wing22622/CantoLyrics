@@ -2,7 +2,7 @@
 
 A small browser app for writing Cantonese lyrics (填詞) against a melody. Paste 簡譜, upload a MIDI file, or upload an audio recording, see a 0243 tone code on every note, type Cantonese characters in one flowing line, and get word suggestions that fit the codes. Any code can be edited by hand.
 
-M1 is client-only. Vite builds a static site that can be hosted on Vercel. There is no backend and this repo does not deploy anything.
+M1 is client-only. Vite builds a static site. There is no backend. GitHub Actions can publish that build to GitHub Pages after Pages is enabled; the site is not live until then. See [GitHub Pages](#github-pages).
 
 The interface is in Traditional Chinese, written in Cantonese.
 
@@ -14,7 +14,15 @@ npm test
 npm run dev
 ```
 
-`npm run build` typechecks and writes `dist/`. `npm run lexicon` rebuilds `public/lexicon.json` from the pinned rime-cantonese files (it downloads them into `data/raw/` if that folder is empty). The built lexicon is already committed, so a normal checkout does not need that step.
+`npm run dev` serves the app at `http://localhost:5173/CantoLyrics/` (the same project path as GitHub Pages). `npm run build` typechecks and writes `dist/`. `npm run lexicon` rebuilds `public/lexicon.json` from the pinned rime-cantonese files (it downloads them into `data/raw/` if that folder is empty). The built lexicon is already committed, so a normal checkout does not need that step.
+
+## GitHub Pages
+
+尚未上線。Not live until Pages is enabled. 預期網址 / expected URL: https://wing22622.github.io/CantoLyrics/
+
+1. 免費方案要公開倉庫；私人倉庫需要 GitHub Pro。Free Pages needs a public repository, or GitHub Pro for a private one.
+2. Settings → Pages → Build and deployment → Source 選 **GitHub Actions**.
+3. 推上 `main`，或在 Actions 手動跑 **Deploy static content to Pages**。The workflow runs `npm ci` and `npm run build`, then publishes `dist/`.
 
 ## Melody
 
