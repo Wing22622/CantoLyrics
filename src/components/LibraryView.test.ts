@@ -46,6 +46,7 @@ describe("library create", () => {
           onOpen: () => {},
           onRename: () => {},
           onDelete: () => {},
+          onFoundLyrics: () => {},
         }),
       );
     });
@@ -74,6 +75,8 @@ describe("library create", () => {
     const onCreate = vi.fn();
     const node = render([], onCreate);
     expect(node.querySelector("button.text-link")).toBeNull();
+    expect(node.textContent).toContain("上網搵歌詞");
+    expect(node.querySelector("a")?.getAttribute("href")).toBe("https://lrclib.net/");
     click(node, "開新歌");
     expect(onCreate).toHaveBeenCalledTimes(1);
     expect(onCreate).toHaveBeenCalledWith();

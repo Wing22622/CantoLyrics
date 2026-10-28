@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { LyricLookup } from "./LyricLookup";
 import { filterSongs, formatUpdated, lyricPreview } from "../library";
+import type { FoundLyrics } from "../lyrics-fetch";
 import type { StoredSong } from "../storage";
 
 interface LibraryViewProps {
@@ -11,9 +13,9 @@ interface LibraryViewProps {
   onOpen: (song: StoredSong) => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onFoundLyrics: (found: FoundLyrics) => void;
 }
 
-/** Title, then 建立. Nothing is saved until that confirm. */
 export function CreateSongPrompt({
   onConfirm,
   onCancel,
@@ -59,6 +61,7 @@ export function LibraryView({
   onOpen,
   onRename,
   onDelete,
+  onFoundLyrics,
 }: LibraryViewProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
@@ -94,6 +97,11 @@ export function LibraryView({
         />
       </label>
       {storageError ? <p className="warnings">{storageError}</p> : null}
+      <section className="panel">
+        <h2>上網搵歌詞</h2>
+        <p className="hint">打歌名，可加歌手。搵到就會開一首新歌，歌詞放進原詞，並轉成聲調碼。</p>
+        <LyricLookup onFound={onFoundLyrics} />
+      </section>
       {songs.length > 0 ? (
         drafting ? (
           <CreateSongPrompt
