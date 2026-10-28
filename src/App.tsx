@@ -93,6 +93,19 @@ function storageMessage(error: unknown): string {
   return error instanceof Error ? error.message : "儲存唔到";
 }
 
+type MelodySurface =
+  | { kind: "chooser" }
+  | { kind: "jianpu" }
+  | { kind: "midi" }
+  | { kind: "audio" };
+
+function surfaceFromSelect(value: string): MelodySurface {
+  if (value === "jianpu") return { kind: "jianpu" };
+  if (value === "midi") return { kind: "midi" };
+  if (value === "audio") return { kind: "audio" };
+  return { kind: "chooser" };
+}
+
 export function App() {
   const [view, setView] = useState<"library" | "editor">("library");
   const [query, setQuery] = useState("");
@@ -103,6 +116,7 @@ export function App() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [tonic, setTonic] = useState("C");
   const [mode, setMode] = useState<"jianpu" | "midi" | "audio">("jianpu");
+  const [surface, setSurface] = useState<MelodySurface>({ kind: "chooser" });
   const [tracks, setTracks] = useState<MidiTrack[]>([]);
   const [trackIndex, setTrackIndex] = useState(0);
   const [note, setNote] = useState("");
@@ -198,6 +212,7 @@ export function App() {
     setSource(song.sourceLyrics);
     applySlots("edit", song.slots);
     setMode(song.jianpu.trim() ? "jianpu" : song.slots.length > 0 ? "midi" : "jianpu");
+    setSurface({ kind: "chooser" });
     setTracks([]);
     setTrackIndex(0);
     setTonic("C");
@@ -275,6 +290,7 @@ export function App() {
     setSource(EXAMPLE_LYRICS);
     setJianpu(EXAMPLE_JIANPU);
     setMode("jianpu");
+    setSurface({ kind: "jianpu" });
     const parsed = fromJianpu(EXAMPLE_JIANPU);
     setTonic(parsed.tonic);
     setWarnings(parsed.warnings);
@@ -446,6 +462,103 @@ export function App() {
     URL.revokeObjectURL(url);
   }
 
+  function onMelodySurface(value: string) {
+    setSurface(surfaceFromSelect(value));
+  }
+
+  function melodyControls() {
+    function assertNever(surface: never): never {
+      throw new Error(JSON.stringify(surface));
+    }
+    switch (surface.kind) {
+      case "chooser":
+        return null;
+      case "jianpu":
+        return (
+          <>
+            <label className="block">
+              貼上簡譜
+              <textarea
+                value={jianpu}
+                rows={4}
+                spellCheck={false}
+                placeholder={"3 4 5 3' 1' | 2' 1' 1' 7 7 |"}
+                onChange={(event) => onJianpu(event.target.value)}
+              />
+            </label>
+            <p className="hint">
+              1–7 係 do–ti，預設 1=C。高音加 '，低音加 , 或者寫喺數字前面加點。- 延長一拍，_ 或 /
+              係半拍，0 係休止，| 係小節。而家調號 1={tonic}。
+              {mode === "midi" ? " 而家顯示緊 MIDI 旋律；改上面嘅簡譜就會換返。" : ""}
+              {mode === "audio" ? " 而家顯示緊由錄音抽出嘅旋律；改上面嘅簡譜就會換返。" : ""}
+            </p>
+          </>
+        );
+      case "midi":
+        return (
+          <>
+            <div className="file-row">
+              <label className="file">
+                上載 MIDI 檔
+                <input
+                  type="file"
+                  accept=".mid,.midi,audio/midi"
+                  onChange={(event) => {
+                    void onMidiFile(event.target.files?.[0] ?? null);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+            {tracks.length > 1 ? (
+              <fieldset>
+                <legend>揀音軌</legend>
+                {tracks.map((track, index) => (
+                  <label key={`${track.name}-${index}`}>
+                    <input
+                      type="radio"
+                      name="track"
+                      checked={trackIndex === index && mode === "midi"}
+                      onChange={() => chooseTrack(index)}
+                    />
+                    {track.name}（{track.notes.length} 個音）
+                  </label>
+                ))}
+              </fieldset>
+            ) : null}
+            {tracks.length === 1 && mode === "midi" ? (
+              <p className="hint">
+                用緊音軌「{tracks[0].name}」，{tracks[0].notes.length} 個音。同一下有幾個音會留最高嗰個。
+              </p>
+            ) : null}
+          </>
+        );
+      case "audio":
+        return (
+          <>
+            <div className="file-row">
+              <label className="file">
+                上載錄音
+                <input
+                  type="file"
+                  accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac"
+                  onChange={(event) => {
+                    void onAudioFile(event.target.files?.[0] ?? null);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+            <p className="hint">
+              錄音可以係 MP3、WAV 或者其他常見音訊。抽出旋律會清走手改聲調碼，已打嘅字會跟住音序留低。要清楚嘅單旋律，和弦同鼓會唔準。
+            </p>
+          </>
+        );
+      default:
+        return assertNever(surface);
+    }
+  }
+
   const run = emptyRun(slots, selection);
   const suggestCodes: Code0243[] = run ? run.map((index) => effectiveCode(slots[index])) : [];
   const handEdited = slots.some((slot) => slot.override != null);
@@ -515,69 +628,18 @@ export function App() {
             </button>
           </div>
           <label className="block">
-            貼上簡譜
-            <textarea
-              value={jianpu}
-              rows={4}
-              spellCheck={false}
-              placeholder={"3 4 5 3' 1' | 2' 1' 1' 7 7 |"}
-              onChange={(event) => onJianpu(event.target.value)}
-            />
+            輸入方法
+            <select
+              value={surface.kind === "chooser" ? "" : surface.kind}
+              onChange={(event) => onMelodySurface(event.target.value)}
+            >
+              <option value="">未揀</option>
+              <option value="jianpu">簡譜</option>
+              <option value="midi">MIDI</option>
+              <option value="audio">錄音</option>
+            </select>
           </label>
-          <p className="hint">
-            1–7 係 do–ti，預設 1=C。高音加 '，低音加 , 或者寫喺數字前面加點。- 延長一拍，_ 或 /
-            係半拍，0 係休止，| 係小節。而家調號 1={tonic}。
-            {mode === "midi" ? " 而家顯示緊 MIDI 旋律；改上面嘅簡譜就會換返。" : ""}
-            {mode === "audio" ? " 而家顯示緊由錄音抽出嘅旋律；改上面嘅簡譜就會換返。" : ""}
-          </p>
-          <div className="file-row">
-            <label className="file">
-              上載 MIDI 檔
-              <input
-                type="file"
-                accept=".mid,.midi,audio/midi"
-                onChange={(event) => {
-                  void onMidiFile(event.target.files?.[0] ?? null);
-                  event.target.value = "";
-                }}
-              />
-            </label>
-            <label className="file">
-              上載錄音
-              <input
-                type="file"
-                accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac"
-                onChange={(event) => {
-                  void onAudioFile(event.target.files?.[0] ?? null);
-                  event.target.value = "";
-                }}
-              />
-            </label>
-          </div>
-          <p className="hint">
-            錄音可以係 MP3、WAV 或者其他常見音訊。抽出旋律會清走手改聲調碼，已打嘅字會跟住音序留低。要清楚嘅單旋律，和弦同鼓會唔準。
-          </p>
-          {tracks.length > 1 ? (
-            <fieldset>
-              <legend>揀音軌</legend>
-              {tracks.map((track, index) => (
-                <label key={`${track.name}-${index}`}>
-                  <input
-                    type="radio"
-                    name="track"
-                    checked={trackIndex === index && mode === "midi"}
-                    onChange={() => chooseTrack(index)}
-                  />
-                  {track.name}（{track.notes.length} 個音）
-                </label>
-              ))}
-            </fieldset>
-          ) : null}
-          {tracks.length === 1 && mode === "midi" ? (
-            <p className="hint">
-              用緊音軌「{tracks[0].name}」，{tracks[0].notes.length} 個音。同一下有幾個音會留最高嗰個。
-            </p>
-          ) : null}
+          {melodyControls()}
           {warnings.length > 0 ? (
             <ul className="warnings">
               {warnings.map((warning) => (
