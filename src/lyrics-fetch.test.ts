@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   LRCLIB_CLIENT,
   lyricSearchMessage,
@@ -55,6 +55,27 @@ describe("readRetryAfter", () => {
 });
 
 describe("searchLyrics", () => {
+  beforeEach(() => {
+    vi.stubEnv("VITE_LRCLIB_PROXY_URL", "");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("searches the configured proxy instead of lrclib.net", async () => {
+    vi.stubEnv("VITE_LRCLIB_PROXY_URL", "https://proxy.example/");
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse([record()]));
+    const outcome = await searchLyrics({ trackName: "喜帖街", artistName: "謝安琪" }, fetchImpl);
+    expect(outcome.ok).toBe(true);
+    const url = String(fetchImpl.mock.calls[0][0]);
+    expect(url.startsWith("https://proxy.example/api/search?")).toBe(true);
+    expect(url).not.toContain("lrclib.net");
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get("track_name")).toBe("喜帖街");
+    expect(parsed.searchParams.get("artist_name")).toBe("謝安琪");
+  });
+
   it("searches by track and artist and sends the CantoLyrics client headers", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse([record()]));
     const outcome = await searchLyrics({ trackName: " 喜帖街 ", artistName: " 謝安琪 " }, fetchImpl);
