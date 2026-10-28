@@ -2,7 +2,7 @@
 
 A small browser app for writing Cantonese lyrics (填詞) against a melody. Paste 簡譜, upload a MIDI file, or upload an audio recording, see a 0243 tone code on every note, type Cantonese characters in one flowing line, and get word suggestions that fit the codes. Any code can be edited by hand.
 
-M1 is client-only. Vite builds a static site. There is no backend. GitHub Actions can publish that build to GitHub Pages after Pages is enabled; the site is not live until then. See [GitHub Pages](#github-pages).
+M1 is client-only. Vite builds a static site, and GitHub Pages serves that build. Lyric search can go through a Cloudflare Worker you deploy yourself. See [Proxy LRCLIB search](#proxy-lrclib-search). GitHub Actions can publish the build to GitHub Pages after Pages is enabled. See [GitHub Pages](#github-pages).
 
 The interface is in Traditional Chinese, written in Cantonese.
 
@@ -23,6 +23,36 @@ npm run dev
 1. 免費方案要公開倉庫；私人倉庫需要 GitHub Pro。Free Pages needs a public repository, or GitHub Pro for a private one.
 2. Settings → Pages → Build and deployment → Source 選 **GitHub Actions**.
 3. 推上 `main`，或在 Actions 手動跑 **Deploy static content to Pages**。The workflow runs `npm ci` and `npm run build`, then publishes `dist/`.
+
+The build reads the Actions variable `VITE_LRCLIB_PROXY_URL`. Leave it empty until the Worker in the next section has a real URL. An empty value keeps the browser on `https://lrclib.net/api/search`.
+
+## Proxy LRCLIB search
+
+Some networks, including at least one Hong Kong mobile carrier, cannot open `lrclib.net`. The page then shows「連唔到 LRCLIB。檢查網絡之後再試，或者自己貼上歌詞。」A desktop browser on another network can still get a 200 from the same search.
+
+`workers/lrclib-proxy` is a Cloudflare Worker named `cantolyrics-lrclib`. It accepts `GET /api/search` and forwards `track_name`, `artist_name`, and `q` to `https://lrclib.net/api/search`. It sets `User-Agent` and `Lrclib-Client` to `CantoLyrics/0.1 (https://wing22622.github.io/CantoLyrics/)`. Any other path, method, or query key is rejected. The Worker returns the upstream status and `Retry-After` when LRCLIB sends one. This repo does not deploy the Worker and does not contain a workers.dev URL.
+
+Deploy it with your own Cloudflare account:
+
+```bash
+cd workers/lrclib-proxy
+npx wrangler login
+npx wrangler deploy
+```
+
+Wrangler prints an origin such as `https://cantolyrics-lrclib.<account>.workers.dev`. Copy that origin with no path.
+
+Then set the GitHub Actions variable `VITE_LRCLIB_PROXY_URL` to that origin (Settings → Secrets and variables → Actions → Variables). Run **Deploy static content to Pages** again. The next Pages build calls that origin plus `/api/search` instead of `lrclib.net`.
+
+For local dev, start the app with the same variable:
+
+```bash
+VITE_LRCLIB_PROXY_URL=https://cantolyrics-lrclib.<account>.workers.dev npm run dev
+```
+
+Until that variable is set for the Pages build, the phone error stays. A placeholder origin is not a fix.
+
+The Worker is public. Anyone with the URL can search LRCLIB through it. It is not a general HTTP proxy. LRCLIB rate limits still apply. GitHub Pages stays the host. Melody, 0243, and the lyric form are unchanged.
 
 ## Melody
 
@@ -128,4 +158,4 @@ Export writes a `.txt` file: one line per bar, characters separated by spaces, �
 - English syllabification is a vowel-group split, not a dictionary. Japanese kanji are one character each, not split into morae. Punctuation is dropped.
 - The lexicon is not exhaustive. Simplified characters are not covered. An unknown character is amber, not a tone error.
 - Alignment “拖音” moves the following source syllables along; it is not a full undo of a melisma.
-- Browser storage only. No account, no server.
+- Browser storage only. No account. Lyric search is the only network call, and it still uses `lrclib.net` from the browser until `VITE_LRCLIB_PROXY_URL` is set.

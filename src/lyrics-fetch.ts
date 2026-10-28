@@ -1,12 +1,12 @@
-export const LRCLIB_CLIENT = "CantoLyrics/0.1 (https://wing22622.github.io/CantoLyrics/)";
+import { LRCLIB_CLIENT, lrclibSearchBase } from "./lrclib-config";
+
+export { LRCLIB_CLIENT };
 
 const CLIENT_HEADERS = {
   Accept: "application/json",
   "User-Agent": LRCLIB_CLIENT,
   "Lrclib-Client": LRCLIB_CLIENT,
 };
-
-const SEARCH_URL = "https://lrclib.net/api/search";
 
 const TIME_TAG = /\[(?:\d{1,3}:){1,2}\d{1,2}(?:[.:]\d{1,3})?\]/g;
 const WORD_TAG = /<(?:\d{1,3}:){1,2}\d{1,2}(?:[.:]\d{1,3})?>/g;
@@ -86,6 +86,7 @@ export async function searchLyrics(
   const trackName = query.trackName.trim();
   if (!trackName) return { ok: false, failure: { status: "not-found" } };
   const artistName = query.artistName.trim();
+  const searchBase = lrclibSearchBase(import.meta.env.VITE_LRCLIB_PROXY_URL);
 
   const attempts: Record<string, string>[] = [{ track_name: trackName }];
   if (artistName) {
@@ -95,19 +96,20 @@ export async function searchLyrics(
 
   let outcome: LyricSearchOutcome = { ok: false, failure: { status: "not-found" } };
   for (const params of attempts) {
-    outcome = await fetchSearch(params, fetchImpl);
+    outcome = await fetchSearch(searchBase, params, fetchImpl);
     if (outcome.ok || outcome.failure.status !== "not-found") return outcome;
   }
   return outcome;
 }
 
 async function fetchSearch(
+  searchBase: string,
   params: Record<string, string>,
   fetchImpl: typeof fetch,
 ): Promise<LyricSearchOutcome> {
   let response: Response;
   try {
-    response = await fetchImpl(`${SEARCH_URL}?${new URLSearchParams(params).toString()}`, {
+    response = await fetchImpl(`${searchBase}/api/search?${new URLSearchParams(params).toString()}`, {
       headers: CLIENT_HEADERS,
     });
   } catch {

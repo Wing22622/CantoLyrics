@@ -34,6 +34,7 @@ describe("LRCLIB lyrics", () => {
 
   beforeEach(() => {
     localStorage.removeItem(SONG_LIBRARY_KEY);
+    vi.stubEnv("VITE_LRCLIB_PROXY_URL", "");
   });
 
   afterEach(() => {
@@ -42,6 +43,7 @@ describe("LRCLIB lyrics", () => {
     root = null;
     host = null;
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   function installFetch(body: unknown, status = 200) {
@@ -110,6 +112,34 @@ describe("LRCLIB lyrics", () => {
     if (!(box instanceof HTMLTextAreaElement)) throw new Error("missing 原詞");
     return box.value;
   }
+
+  it("asks the configured proxy for lyrics and still fills 0243", async () => {
+    vi.stubEnv("VITE_LRCLIB_PROXY_URL", "https://proxy.example/");
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("lexicon.json")) {
+        return new Response(lexiconJson, {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      urls.push(url);
+      return new Response(JSON.stringify([hit]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const node = await mount();
+    type(node, "搵歌詞歌名", "喜帖街");
+    type(node, "歌手", "謝安琪");
+    await submit(node);
+    expect(urls).toEqual([
+      "https://proxy.example/api/search?track_name=%E5%96%9C%E5%B8%96%E8%A1%97&artist_name=%E8%AC%9D%E5%AE%89%E7%90%AA",
+    ]);
+    expect(sourceLyrics(node)).toBe("人人常歡笑");
+    expectDigits(node, "人人常歡笑");
+  });
 
   it("opens a new song and shows the lyric in 原詞 and the 0243 box", async () => {
     installFetch([hit]);
