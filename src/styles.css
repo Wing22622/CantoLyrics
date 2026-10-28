@@ -591,4 +591,6 @@ button.danger { background: #9f1239; }
   .rename-row label { min-width: 0; width: 100%; }
   .legend { gap: 0.25rem 0.55rem; }
   .song-card, .preview, .panel h2 { overflow-wrap: anywhere; }
+  .library .lyric-lookup label { flex: 0 1 auto; }
+  .library > .panel { margin-top: 0; }
 }
