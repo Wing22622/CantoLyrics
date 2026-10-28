@@ -8,15 +8,32 @@ import {
   type ReadingChoice,
 } from "../lyric-0243";
 
+export interface LyricSeed {
+  id: number;
+  text: string;
+}
+
 interface LyricDigitsPanelProps {
   readingsFor: (char: string) => readonly LyricReading[];
   lexiconReady: boolean;
   lexiconError?: string;
+  seed?: LyricSeed | null;
 }
 
-export function LyricDigitsPanel({ readingsFor, lexiconReady, lexiconError = "" }: LyricDigitsPanelProps) {
+export function LyricDigitsPanel({
+  readingsFor,
+  lexiconReady,
+  lexiconError = "",
+  seed = null,
+}: LyricDigitsPanelProps) {
   const [text, setText] = useState("");
   const [choices, setChoices] = useState<readonly ReadingChoice[]>([]);
+  const [seedId, setSeedId] = useState<number | null>(null);
+  if (seed && seed.id !== seedId) {
+    setSeedId(seed.id);
+    setChoices([]);
+    setText(seed.text);
+  }
   const result = lexiconReady ? mapLyricDigits(text, readingsFor, choices) : null;
 
   function onChoose(token: LyricCharToken, jyutping: string) {

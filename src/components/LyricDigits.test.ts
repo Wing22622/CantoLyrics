@@ -6,7 +6,7 @@ import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import { LyricDigitsPanel } from "./LyricDigits";
+import { LyricDigitsPanel, type LyricSeed } from "./LyricDigits";
 import type { LyricReading } from "../lyric-0243";
 
 const fake: Record<string, LyricReading[]> = {
@@ -32,21 +32,26 @@ describe("LyricDigitsPanel", () => {
     host = null;
   });
 
-  function render(ready = true) {
+  function render(ready = true, seed: LyricSeed | null = null) {
     const node = document.createElement("div");
     document.body.appendChild(node);
     host = node;
     const mounted = createRoot(node);
     root = mounted;
+    paint(mounted, ready, seed);
+    return node;
+  }
+
+  function paint(mounted: Root, ready: boolean, seed: LyricSeed | null) {
     act(() => {
       mounted.render(
         createElement(LyricDigitsPanel, {
           readingsFor,
           lexiconReady: ready,
+          seed,
         }),
       );
     });
-    return node;
   }
 
   function typePhrase(node: ParentNode, value: string) {
@@ -121,6 +126,21 @@ describe("LyricDigitsPanel", () => {
     typePhrase(node, "abc");
     expect(node.querySelector(".lyric-digits")).toBeNull();
     expect(node.textContent).toContain("呢段冇漢字");
+  });
+
+  it("shows digits for a fetched lyric and replaces them when a newer lyric arrives", () => {
+    const node = render(true, { id: 1, text: "人人" });
+    expect(node.querySelector("textarea")?.value).toBe("人人");
+    expect(node.querySelector(".lyric-digits")?.textContent).toBe("00");
+    if (!root) throw new Error("missing root");
+    paint(root, true, { id: 2, text: "笑" });
+    expect(node.querySelector("textarea")?.value).toBe("笑");
+    expect(node.querySelector(".lyric-digits")?.textContent).toBe("4");
+    typePhrase(node, "人");
+    expect(node.querySelector(".lyric-digits")?.textContent).toBe("0");
+    paint(root, true, { id: 3, text: "" });
+    expect(node.querySelector("textarea")?.value).toBe("");
+    expect(node.querySelector(".lyric-digits")).toBeNull();
   });
 
   it("does not invent digits before the lexicon is ready", () => {

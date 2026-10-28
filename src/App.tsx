@@ -3,7 +3,8 @@ import { alignLyric, alignmentNote, toggleMelisma } from "./align";
 import { clipSamples, decodeToMono } from "./audio-file";
 import { framesFromSamples, melodyFromFrames } from "./audio-melody";
 import { CreateSongPrompt, LibraryView } from "./components/LibraryView";
-import { LyricDigitsPanel } from "./components/LyricDigits";
+import { LyricDigitsPanel, type LyricSeed } from "./components/LyricDigits";
+import { LyricLookup } from "./components/LyricLookup";
 import { SuggestPanel } from "./components/SuggestPanel";
 import { SlotRow, type Slot } from "./components/SlotRow";
 import { EXAMPLE_JIANPU, EXAMPLE_LYRICS, EXAMPLE_TITLE } from "./example";
@@ -14,6 +15,7 @@ import { loadLexicon, type Lexicon } from "./lexicon";
 import { midiNoteName, parseMidi, type MidiTrack } from "./midi";
 import { inferLyricLang, segmentLyric } from "./syllables";
 import { clearOverrides, effectiveCode, slotsForTrackChoice, slotsFromNotes, withCode, type IncomingNote } from "./slots";
+import type { FoundLyrics } from "./lyrics-fetch";
 import { blankSong, deleteSong, listSongs, renameSong, saveSong, type StoredSong } from "./storage";
 import type { Code0243 } from "./tone-0243";
 import type { WordEntry } from "./suggest";
@@ -127,12 +129,14 @@ export function App() {
   const [songId, setSongId] = useState<string | null>(null);
   const [storageError, setStorageError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [lyricSeed, setLyricSeed] = useState<LyricSeed | null>(null);
   const anchor = useRef(0);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const lineBeforeImport = useRef<Slot[] | null>(null);
   const slotChange = useRef(slotChangeFor("import"));
   const slotsRef = useRef<Slot[]>([]);
   const savedSnapshot = useRef("");
+  const lyricSeedId = useRef(0);
   const draftRef = useRef<Draft>({ songId: null, title: "", jianpu: "", source: "", slots: [] });
   slotsRef.current = slots;
   draftRef.current = { songId, title, jianpu, source, slots };
@@ -219,7 +223,36 @@ export function App() {
     setSelection([]);
     setWarnings([]);
     setNote("");
+    showLyricDigits(song.sourceLyrics);
     setView("editor");
+  }
+
+  function showLyricDigits(text: string) {
+    lyricSeedId.current += 1;
+    setLyricSeed({ id: lyricSeedId.current, text });
+  }
+
+  function onFoundFromLibrary(found: FoundLyrics) {
+    const created = { ...blankSong(found.title), sourceLyrics: found.lyrics };
+    try {
+      setSaved(saveSong(created));
+      setStorageError("");
+    } catch (error) {
+      setStorageError(storageMessage(error));
+      return;
+    }
+    openSong(created);
+  }
+
+  function onFoundInEditor(found: FoundLyrics) {
+    setSource(found.lyrics);
+    setTitle((current) => {
+      const trimmed = current.trim();
+      if (trimmed && trimmed !== "未命名") return current;
+      const next = found.title.trim();
+      return next || trimmed || "未命名";
+    });
+    showLyricDigits(found.lyrics);
   }
 
   function onCreate(title?: string) {
@@ -575,6 +608,7 @@ export function App() {
           onOpen={openSong}
           onRename={onRename}
           onDelete={onDelete}
+          onFoundLyrics={onFoundFromLibrary}
         />
       </div>
     );
@@ -656,6 +690,7 @@ export function App() {
               對齊原詞
             </button>
           </div>
+          <LyricLookup onFound={onFoundInEditor} />
           <textarea
             value={source}
             rows={3}
@@ -672,6 +707,7 @@ export function App() {
           readingsFor={(char) => lexicon?.readingsFor(char) ?? []}
           lexiconReady={lexicon != null}
           lexiconError={lexiconError}
+          seed={lyricSeed}
         />
 
         <section className="panel">
