@@ -1,6 +1,6 @@
 # CantoLyrics
 
-A small browser app for writing Cantonese lyrics (填詞) against a melody. Paste 簡譜, upload a MIDI file, or upload an audio recording, see a 0243 tone code on every note, type Cantonese characters in one flowing line, and get word suggestions that fit the codes. Any code can be edited by hand.
+A small browser app for writing Cantonese lyrics (填詞) against a melody. Paste 簡譜, upload a MIDI file, upload an audio recording, or search a song title for a melody, see a 0243 tone code on every note, type Cantonese characters in one flowing line, and get word suggestions that fit the codes. Any code can be edited by hand.
 
 M1 is client-only. Vite builds a static site, and GitHub Pages serves that build. Lyric search can go through a Cloudflare Worker you deploy yourself. See [Proxy LRCLIB search](#proxy-lrclib-search). GitHub Actions can publish the build to GitHub Pages after Pages is enabled. See [GitHub Pages](#github-pages).
 
@@ -66,6 +66,10 @@ The Worker is public. Anyone with the URL can search LRCLIB through it. It is no
 MIDI: format 0 or 1. If the file has several tracks, pick one. A chord keeps the highest note. A later overlapping note trims the one before it.
 
 Audio (MP3, WAV, and other files the browser can decode): the page resamples to mono and estimates one pitch at a time with YIN. Stable pitches become notes. Rhythm is only a rough grid, a quarter note at 120 BPM snapped to the nearest eighth, and a bar is 4 beats. This is a monophonic guess. Chords, harmony, and drums come out wrong or not at all. A silent or unpitched file shows「呢段錄音搵唔到清楚嘅旋律」and clears the line. A file the browser cannot decode shows「呢個音訊檔讀唔到」and clears the line too. Only the first 90 seconds are analysed.
+
+Song title: in the library or the melody panel, type a title and an optional artist. This looks up a **melody**, not lyrics. 《小星星》, Twinkle Twinkle Little Star, and Ah! vous dirai-je, maman use a public-domain MIDI written in `src/melody-catalog.ts` (the 1761 French folk tune, monophonic, in C). The bytes are not downloaded. Any other title searches [Wikimedia Commons](https://commons.wikimedia.org/) for a MIDI file and keeps it only when the license is public domain, CC0, CC BY, or CC BY-SA. The file is read with the existing MIDI parser. A track whose name looks like a melody is used; otherwise the track with the most notes is used. The other tracks stay in the MIDI picker.
+
+Those notes then go through `slotsForTrackChoice`, the same import a recording uses after pitch tracking, which calls `mapMelody`. The line is editable 0243. The 原詞 box is left alone. A miss shows「搵唔到免費授權嘅旋律」. A network failure shows「連唔到 Wikimedia Commons」. A file with no notes shows「呢個 MIDI 入面冇旋律音」. There is no MusicXML parser on this path.
 
 Rests have no code and no lyric slot. Each sung note is one syllable in the line.
 
@@ -146,7 +150,7 @@ Export writes a `.txt` file: one line per bar, characters separated by spaces, �
 ## Known limitations
 
 - One scaffold per phrase. No 節點斷開, no alternate fillings, no 同向 slider. 外張 only shows up as a gap cost (0 and 3 can stretch, but they still pay for the semitones). Hand-editing a code is the way to force another filling.
-- Hand edits survive 簡譜 edits when the note's pitch, spelling, and duration are unchanged, and are dropped on a new melody import (MIDI, another MIDI track, or audio). A fresh import still lines characters up by sung-note index.
+- Hand edits survive 簡譜 edits when the note's pitch, spelling, and duration are unchanged, and are dropped on a new melody import (MIDI, another MIDI track, audio, or a melody found by song title). A fresh import still lines characters up by sung-note index.
 - While a MIDI file is open, switching track restores the line from before that file. That backup is dropped in one place, and only when the user edits a character or a code (or another slot edit such as 拖音). Choosing a track, or re-parsing the 簡譜, does not drop it. Changing the title or the big 原詞 box does not either. Loading the example, opening a song, or an empty file does.
 - A MIDI file with no melody track clears the lyric line and shows「檔案入面冇旋律音」.
 - Audio pitch is one note at a time. Polyphony, percussion, noise, and a quiet take will miss notes or warn that no melody was found. Timing is quantised; it is not a transcription.
@@ -158,4 +162,4 @@ Export writes a `.txt` file: one line per bar, characters separated by spaces, �
 - English syllabification is a vowel-group split, not a dictionary. Japanese kanji are one character each, not split into morae. Punctuation is dropped.
 - The lexicon is not exhaustive. Simplified characters are not covered. An unknown character is amber, not a tone error.
 - Alignment “拖音” moves the following source syllables along; it is not a full undo of a melisma.
-- Browser storage only. No account. Lyric search is the only network call, and it still uses `lrclib.net` from the browser until `VITE_LRCLIB_PROXY_URL` is set.
+- Browser storage only. No account. Lyric search still uses `lrclib.net` from the browser until `VITE_LRCLIB_PROXY_URL` is set. Melody-from-title uses the bundled 《小星星》 MIDI offline, and otherwise calls `commons.wikimedia.org` plus `upload.wikimedia.org`. Commons can return a different arrangement from the song you meant. Only 《小星星》 is guaranteed without the network.

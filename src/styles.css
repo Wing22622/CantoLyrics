@@ -492,7 +492,8 @@ button.text-link {
   margin-top: 0.55rem;
 }
 
-.lyric-lookup {
+.lyric-lookup,
+.melody-lookup {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem 0.6rem;
@@ -500,9 +501,13 @@ button.text-link {
   margin: 0.55rem 0 0.7rem;
 }
 
-.lyric-lookup label { flex: 1 1 9rem; }
+.lyric-lookup label,
+.melody-lookup label { flex: 1 1 9rem; }
 
-.lyric-lookup input { width: 100%; }
+.lyric-lookup input,
+.melody-lookup input { width: 100%; }
+
+.melody-credit a { color: inherit; }
 
 .lookup-status { flex-basis: 100%; margin: 0; }
 
@@ -579,18 +584,21 @@ button.danger { background: #9f1239; }
   .search input,
   .create-song input,
   .lyric-lookup input,
+  .melody-lookup input,
   .rename-row input { width: 100%; }
   .song-actions > button:not(.text-link) { width: 100%; }
   .panel { padding: 0.75rem 0.7rem 0.9rem; }
   .file-row,
   .create-song,
   .lyric-lookup,
+  .melody-lookup,
   .rename-row,
   .confirm,
   .card-actions { flex-direction: column; align-items: stretch; }
   .rename-row label { min-width: 0; width: 100%; }
   .legend { gap: 0.25rem 0.55rem; }
   .song-card, .preview, .panel h2 { overflow-wrap: anywhere; }
-  .library .lyric-lookup label { flex: 0 1 auto; }
+  .library .lyric-lookup label,
+  .library .melody-lookup label { flex: 0 1 auto; }
   .library > .panel { margin-top: 0; }
 }

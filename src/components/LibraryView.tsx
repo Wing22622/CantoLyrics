@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { LyricLookup } from "./LyricLookup";
+import { MelodyLookup } from "./MelodyLookup";
 import { filterSongs, formatUpdated, lyricPreview } from "../library";
 import type { FoundLyrics } from "../lyrics-fetch";
+import type { ResolvedMelody } from "../melody-search";
 import type { StoredSong } from "../storage";
 
 interface LibraryViewProps {
@@ -14,6 +16,7 @@ interface LibraryViewProps {
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onFoundLyrics: (found: FoundLyrics) => void;
+  onFoundMelody: (found: ResolvedMelody) => void;
 }
 
 export function CreateSongPrompt({
@@ -62,6 +65,7 @@ export function LibraryView({
   onRename,
   onDelete,
   onFoundLyrics,
+  onFoundMelody,
 }: LibraryViewProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
@@ -97,6 +101,11 @@ export function LibraryView({
         />
       </label>
       {storageError ? <p className="warnings">{storageError}</p> : null}
+      <section className="panel">
+        <h2>用歌名搵旋律</h2>
+        <p className="hint">打歌名，可加歌手。搵到旋律就會開一首新歌，聲調碼由旋律計出嚟，可以再改。唔會填歌詞。</p>
+        <MelodyLookup onFound={onFoundMelody} />
+      </section>
       <section className="panel">
         <h2>上網搵歌詞</h2>
         <p className="hint">打歌名，可加歌手。搵到就會開一首新歌，歌詞放進原詞，並轉成聲調碼。</p>
