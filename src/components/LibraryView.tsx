@@ -103,7 +103,7 @@ export function LibraryView({
       {storageError ? <p className="warnings">{storageError}</p> : null}
       <section className="panel">
         <h2>用歌名搵旋律</h2>
-        <p className="hint">打歌名，可加歌手。搵到旋律就會開一首新歌，聲調碼由旋律計出嚟，可以再改。唔會填歌詞。</p>
+        <p className="hint">打歌名，可加歌手。搵到旋律就會開一首新歌，聲調碼由旋律計出嚟，可以再改。唔會填歌詞。搵唔到可以上載或者貼上自己嘅 MIDI。</p>
         <MelodyLookup onFound={onFoundMelody} />
       </section>
       <section className="panel">

@@ -3,9 +3,11 @@
  *
  * 《小星星》 / Twinkle Twinkle / Ah! vous dirai-je, maman comes from the
  * bundled public-domain MIDI in `melody-catalog.ts` (opening seven notes).
- * Any other title is
- * looked up on Wikimedia Commons, and only a free-licensed MIDI file
- * (public domain, CC0, CC BY, CC BY-SA) is kept.
+ * Any other title is looked up on Wikimedia Commons first. If that has no
+ * free-licensed MIDI, the same title is looked up on Internet Archive.
+ * Only a free license is kept (public domain, CC0, CC BY, CC BY-SA), and
+ * only from an allowlisted host. A file the user uploads or pastes is read
+ * with the same MIDI parser and does not go through those hosts.
  *
  * This module stops at notes. The editor imports them with
  * `slotsForTrackChoice`, the same step a recording uses after
@@ -16,6 +18,7 @@ import { midiNoteName, parseMidi, type MidiTrack } from "./midi";
 import type { IncomingNote } from "./slots";
 
 export const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
+export const ARCHIVE_API = "https://archive.org/advancedsearch.php";
 const COMMONS_CLIENT = "CantoLyrics/0.1 (https://wing22622.github.io/CantoLyrics/)";
 const SEARCH_LIMIT = "15";
 const HIT_LIMIT = 5;
@@ -29,7 +32,9 @@ export interface MelodyQuery {
 
 export type MelodySource =
   | { kind: "bundle"; id: "twinkle" }
-  | { kind: "commons"; fileUrl: string; pageUrl: string; license: string; fileTitle: string };
+  | { kind: "commons"; fileUrl: string; pageUrl: string; license: string; fileTitle: string }
+  | { kind: "archive"; identifier: string; pageUrl: string; license: string; itemTitle: string }
+  | { kind: "own" };
 
 export interface MelodyHit {
   id: string;
@@ -65,17 +70,17 @@ export type MelodyResolveOutcome = { ok: true; melody: ResolvedMelody } | { ok: 
 export function melodySearchMessage(failure: MelodyFailure): string {
   switch (failure.status) {
     case "not-found":
-      return "搵唔到免費授權嘅旋律。可以改歌名或者歌手再搵，又或者上載 MIDI。";
+      return "搵唔到免費授權嘅旋律。可以改歌名或者歌手再搵，或者喺下面上載、貼上自己嘅 MIDI。";
     case "network":
-      return "連唔到 Wikimedia Commons。檢查網絡之後再試，或者上載 MIDI。";
+      return "連唔到 Wikimedia Commons 同 Internet Archive。檢查網絡之後再試，或者喺下面上載、貼上自己嘅 MIDI。";
     case "bad-response":
-      return "旋律庫回覆睇唔明。可以再試，或者上載 MIDI。";
+      return "旋律庫回覆睇唔明。可以再試，或者喺下面上載、貼上自己嘅 MIDI。";
     case "rate-limit":
-      return "Wikimedia Commons 限制咗查詢。等一陣再試，或者上載 MIDI。";
+      return "旋律庫限制咗查詢。等一陣再試，或者喺下面上載、貼上自己嘅 MIDI。";
     case "empty":
-      return "呢個 MIDI 入面冇旋律音。可以揀另一首，或者上載 MIDI。";
+      return "呢個 MIDI 入面冇旋律音。可以揀另一首，或者上載、貼上自己嘅 MIDI。";
     case "unreadable":
-      return "呢個 MIDI 讀唔到。可以揀另一首，或者上載 MIDI。";
+      return "呢個 MIDI 讀唔到。可以揀另一首，或者上載、貼上自己嘅 MIDI。";
   }
 }
 
@@ -103,10 +108,13 @@ export function chooseMelodyTrack(tracks: readonly { name: string; notes: readon
 }
 
 export function isFreeMelodyLicense(raw: string): boolean {
-  const text = raw.toLowerCase().replace(/<[^>]*>/g, " ");
-  if (!text.trim()) return false;
-  if (/non-?commercial|\bnc\b|no ?derivatives|\bnd\b|fair use|all rights reserved|copyrighted/.test(text)) return false;
-  return /public domain|\bcc0\b|\bcc[-\s]?by\b|gfdl|free art|no restrictions|\bpd\b/.test(text);
+  const text = raw.toLowerCase().replace(/<[^>]*>/g, " ").trim();
+  if (!text || text === "none") return false;
+  if (/non-?commercial|\bnc\b|no ?derivatives|\bnd\b|fair use|all rights reserved|copyrighted/.test(text)) {
+    return false;
+  }
+  if (/public[-\s]?domain|\bcc0\b|\bcc[-\s]?by\b|gfdl|free art|no restrictions|\bpd\b/.test(text)) return true;
+  return /creativecommons\.org\/(?:publicdomain\/(?:zero|mark)|licenses\/by(?:-sa)?\/)/.test(text);
 }
 
 export function normalizeMelodyTitle(text: string): string {
@@ -136,11 +144,18 @@ export async function searchMelody(query: MelodyQuery, fetchImpl: typeof fetch =
   const trackName = query.trackName.trim();
   if (!trackName) return { ok: false, failure: { status: "not-found" } };
   if (isBundledTwinkle(trackName)) return { ok: true, hits: [bundleHit(trackName)] };
-  return searchCommons({ trackName, artistName: query.artistName.trim() }, fetchImpl);
+  const narrowed = { trackName, artistName: query.artistName.trim() };
+  const commons = await searchCommons(narrowed, fetchImpl);
+  if (commons.ok && commons.hits.length > 0) return commons;
+  const archive = await searchArchive(narrowed, fetchImpl);
+  if (archive.ok && archive.hits.length > 0) return archive;
+  return { ok: false, failure: strongerFailure(commons, archive) };
 }
 
 export async function resolveMelody(hit: MelodyHit, fetchImpl: typeof fetch = fetch): Promise<MelodyResolveOutcome> {
   if (hit.ref.kind === "bundle") return midiOutcome(hit, twinkleMidi(), bundleSource());
+  if (hit.ref.kind === "own") return { ok: false, failure: { status: "unreadable" } };
+  if (hit.ref.kind === "archive") return resolveArchive(hit, fetchImpl);
   const response = await request(hit.ref.fileUrl, fetchImpl, "audio/midi");
   if (response === "network") return { ok: false, failure: { status: "network" } };
   if (response.status === 429) return { ok: false, failure: { status: "rate-limit" } };
@@ -152,12 +167,78 @@ export async function resolveMelody(hit: MelodyHit, fetchImpl: typeof fetch = fe
   return midiOutcome(hit, bytes, commonsSource(hit.ref));
 }
 
+/** Bytes the user uploaded or pasted. Same parser as a searched file. */
+export function melodyFromOwnMidi(bytes: Uint8Array, title: string): MelodyResolveOutcome {
+  const name = title.trim() || "未命名";
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_MIDI_BYTES) {
+    return { ok: false, failure: { status: "unreadable" } };
+  }
+  return midiOutcome(
+    {
+      id: "own",
+      label: name,
+      detail: "自己嘅 MIDI",
+      title: name,
+      sourceUrl: "",
+      ref: { kind: "own" },
+    },
+    bytes,
+    "旋律來自你上載或者貼上嘅 MIDI。呢段唔係歌詞。",
+  );
+}
+
+/** `data:audio/midi;base64,…` or raw base64 whose bytes start with `MThd`. */
+export function midiBytesFromText(text: string): Uint8Array | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const dataUrl = /^data:([^,]*),([\s\S]+)$/i.exec(trimmed);
+  let payload = trimmed;
+  if (dataUrl) {
+    const header = dataUrl[1].toLowerCase();
+    if (!header.includes("base64") || !/midi|octet-stream/.test(header)) return null;
+    payload = dataUrl[2];
+  } else if (!/^[A-Za-z0-9+/=\s]+$/.test(trimmed)) {
+    return null;
+  }
+  const clean = payload.replace(/\s+/g, "");
+  if (clean.length < 16 || clean.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(clean)) return null;
+  let binary: string;
+  try {
+    binary = atob(clean);
+  } catch {
+    return null;
+  }
+  if (binary.length < 14 || binary.length > MAX_MIDI_BYTES) return null;
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  if (String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== "MThd") return null;
+  return bytes;
+}
+
 function bundleSource(): string {
   return "旋律來自內置公有領域曲《小星星》首句七音（Ah! vous dirai-je, maman）。呢段 MIDI 寫喺程式入面，唔係成首歌，亦唔係歌詞。";
 }
 
 function commonsSource(ref: Extract<MelodySource, { kind: "commons" }>): string {
   return `旋律來自 Wikimedia Commons「${ref.fileTitle}」（${ref.license}）。`;
+}
+
+function archiveSource(ref: Extract<MelodySource, { kind: "archive" }>, fileName: string): string {
+  return `旋律來自 Internet Archive「${ref.itemTitle}」（${licenseLabel(ref.license)}，檔案 ${fileName}）。`;
+}
+
+const FAILURE_RANK: Record<MelodyFailure["status"], number> = {
+  "not-found": 0,
+  empty: 1,
+  unreadable: 1,
+  "bad-response": 2,
+  network: 3,
+  "rate-limit": 4,
+};
+
+function strongerFailure(first: MelodySearchOutcome, second: MelodySearchOutcome): MelodyFailure {
+  const left = first.ok ? ({ status: "not-found" } as const) : first.failure;
+  const right = second.ok ? ({ status: "not-found" } as const) : second.failure;
+  return FAILURE_RANK[left.status] >= FAILURE_RANK[right.status] ? left : right;
 }
 
 function midiOutcome(hit: MelodyHit, bytes: Uint8Array, source: string): MelodyResolveOutcome {
@@ -216,6 +297,185 @@ export function commonsSearchUrl(query: MelodyQuery): string {
     iiextmetadatafilter: "LicenseShortName|UsageTerms",
   });
   return `${COMMONS_API}?${params.toString()}`;
+}
+
+const ARCHIVE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,180}$/;
+
+export function archiveSearchUrl(query: MelodyQuery): string {
+  const title = query.trackName.replace(/["\\]/g, " ").replace(/\s+/g, " ").trim();
+  const q = `format:(MIDI) AND (title:("${title}") OR description:("${title}"))`;
+  const params = new URLSearchParams({
+    q,
+    output: "json",
+    rows: SEARCH_LIMIT,
+  });
+  for (const field of ["identifier", "title", "licenseurl", "rights"]) params.append("fl[]", field);
+  return `${ARCHIVE_API}?${params.toString()}`;
+}
+
+async function searchArchive(query: MelodyQuery, fetchImpl: typeof fetch): Promise<MelodySearchOutcome> {
+  const response = await request(archiveSearchUrl(query), fetchImpl, "application/json");
+  if (response === "network") return { ok: false, failure: { status: "network" } };
+  if (response.status === 429) return { ok: false, failure: { status: "rate-limit" } };
+  if (response.status === 404) return { ok: false, failure: { status: "not-found" } };
+  if (!response.ok) return { ok: false, failure: { status: "bad-response" } };
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return { ok: false, failure: { status: "bad-response" } };
+  }
+  if (!body || typeof body !== "object") return { ok: false, failure: { status: "bad-response" } };
+  const docs = (body as { response?: { docs?: unknown } }).response?.docs;
+  if (!Array.isArray(docs)) return { ok: false, failure: { status: "not-found" } };
+  const hits = archiveHits(docs, query.trackName);
+  if (hits.length === 0) return { ok: false, failure: { status: "not-found" } };
+  return { ok: true, hits };
+}
+
+async function resolveArchive(hit: MelodyHit, fetchImpl: typeof fetch): Promise<MelodyResolveOutcome> {
+  if (hit.ref.kind !== "archive") return { ok: false, failure: { status: "unreadable" } };
+  const metaUrl = archiveHttps(`https://archive.org/metadata/${encodeURIComponent(hit.ref.identifier)}`);
+  if (!metaUrl) return { ok: false, failure: { status: "unreadable" } };
+  const response = await request(metaUrl, fetchImpl, "application/json");
+  if (response === "network") return { ok: false, failure: { status: "network" } };
+  if (response.status === 429) return { ok: false, failure: { status: "rate-limit" } };
+  if (!response.ok) return { ok: false, failure: { status: "unreadable" } };
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return { ok: false, failure: { status: "bad-response" } };
+  }
+  if (!body || typeof body !== "object") return { ok: false, failure: { status: "bad-response" } };
+  const meta = (body as { metadata?: unknown }).metadata;
+  const license = metadataLicense(meta && typeof meta === "object" ? meta : {}, hit.ref.license);
+  if (!license) return { ok: false, failure: { status: "not-found" } };
+  const fileName = pickArchiveMidi((body as { files?: unknown }).files);
+  if (!fileName) return { ok: false, failure: { status: "empty" } };
+  const fileUrl = archiveFileUrl(hit.ref.identifier, fileName);
+  if (!fileUrl) return { ok: false, failure: { status: "unreadable" } };
+  const downloaded = await request(fileUrl, fetchImpl, "audio/midi");
+  if (downloaded === "network") return { ok: false, failure: { status: "network" } };
+  if (downloaded.status === 429) return { ok: false, failure: { status: "rate-limit" } };
+  if (!downloaded.ok) return { ok: false, failure: { status: "unreadable" } };
+  const bytes = new Uint8Array(await downloaded.arrayBuffer());
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_MIDI_BYTES) {
+    return { ok: false, failure: { status: "unreadable" } };
+  }
+  const ref = { ...hit.ref, license };
+  return midiOutcome({ ...hit, ref }, bytes, archiveSource(ref, fileName));
+}
+
+function archiveHits(docs: unknown[], title: string): MelodyHit[] {
+  const hits: MelodyHit[] = [];
+  for (const doc of docs) {
+    const hit = archiveHit(doc, title);
+    if (!hit) continue;
+    hits.push(hit);
+    if (hits.length >= HIT_LIMIT) break;
+  }
+  return hits;
+}
+
+function archiveHit(doc: unknown, title: string): MelodyHit | null {
+  if (!doc || typeof doc !== "object") return null;
+  const identifier = iaText((doc as { identifier?: unknown }).identifier);
+  if (!ARCHIVE_ID.test(identifier)) return null;
+  const license = archiveLicense(doc);
+  if (!license) return null;
+  const itemTitle = iaText((doc as { title?: unknown }).title) || identifier;
+  const pageUrl = `https://archive.org/details/${encodeURIComponent(identifier)}`;
+  return {
+    id: `archive:${identifier}`,
+    label: itemTitle,
+    detail: licenseLabel(license),
+    title,
+    sourceUrl: pageUrl,
+    ref: { kind: "archive", identifier, pageUrl, license, itemTitle },
+  };
+}
+
+function archiveLicense(record: object): string {
+  const url = meaningful(iaText((record as { licenseurl?: unknown }).licenseurl));
+  const rights = meaningful(iaText((record as { rights?: unknown }).rights));
+  if (url) return isFreeMelodyLicense(url) ? url : "";
+  if (rights && isFreeMelodyLicense(rights)) return rights;
+  return "";
+}
+
+function metadataLicense(meta: object, fallback: string): string {
+  const stated = archiveLicense(meta);
+  if (stated) return stated;
+  const url = meaningful(iaText((meta as { licenseurl?: unknown }).licenseurl));
+  if (url) return "";
+  return isFreeMelodyLicense(fallback) ? fallback : "";
+}
+
+function pickArchiveMidi(files: unknown): string {
+  if (!Array.isArray(files)) return "";
+  const rows = files.flatMap((file) => {
+    if (!file || typeof file !== "object") return [];
+    const name = iaText((file as { name?: unknown }).name);
+    if (!safeMidiName(name)) return [];
+    const size = Number((file as { size?: unknown }).size);
+    if (Number.isFinite(size) && size > MAX_MIDI_BYTES) return [];
+    return [
+      {
+        name,
+        format: iaText((file as { format?: unknown }).format),
+        source: iaText((file as { source?: unknown }).source),
+      },
+    ];
+  });
+  const melody = rows.find((row) => MELODY_TRACK.test(row.name));
+  if (melody) return melody.name;
+  const original = rows.find((row) => row.source === "original" && /midi/i.test(row.format));
+  if (original) return original.name;
+  return rows.find((row) => /midi/i.test(row.format))?.name ?? rows[0]?.name ?? "";
+}
+
+function archiveFileUrl(identifier: string, fileName: string): string {
+  if (!ARCHIVE_ID.test(identifier) || !safeMidiName(fileName)) return "";
+  return archiveHttps(
+    `https://archive.org/cors/${encodeURIComponent(identifier)}/${encodeURIComponent(fileName)}`,
+  );
+}
+
+function safeMidiName(name: string): boolean {
+  if (name.length < 5 || name.length > 180) return false;
+  if (/[\\/\u0000?#%]/.test(name) || name.includes("..")) return false;
+  return /\.midi?$/i.test(name);
+}
+
+function iaText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) {
+    const first = value.find((item) => typeof item === "string" && item.trim());
+    return typeof first === "string" ? first.trim() : "";
+  }
+  return "";
+}
+
+function meaningful(value: string): string {
+  const text = value.trim();
+  if (!text || text.toLowerCase() === "none") return "";
+  return text;
+}
+
+function licenseLabel(raw: string): string {
+  const text = raw.toLowerCase();
+  if (/publicdomain\/zero|\bcc0\b/.test(text)) return "CC0";
+  if (/public[-\s]?domain|publicdomain/.test(text)) return "Public domain";
+  if (/by-sa|by sa/.test(text)) return "CC BY-SA";
+  if (/\/licenses\/by\/|\bcc[-\s]?by\b/.test(text)) return "CC BY";
+  if (text.includes("gfdl")) return "GFDL";
+  const plain = plainText(raw);
+  return plain.length > 80 ? `${plain.slice(0, 77)}…` : plain;
+}
+
+function archiveHttps(value: string): string {
+  return allowedHttps(value, "archive.org");
 }
 
 function commonsHits(body: object, title: string): MelodyHit[] {

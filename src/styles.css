@@ -511,6 +511,16 @@ button.text-link {
 
 .lookup-status { flex-basis: 100%; margin: 0; }
 
+.own-midi {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.own-midi textarea { min-height: 4.5rem; }
+
 .hit-list {
   list-style: none;
   margin: 0;

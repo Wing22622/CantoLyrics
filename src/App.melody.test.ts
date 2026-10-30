@@ -7,6 +7,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { App } from "./App";
+import { twinkleMidi } from "./melody-catalog";
 import { EXAMPLE_JIANPU } from "./example";
 import { loadLexicon } from "./lexicon";
 import type { LyricSlot } from "./slots";
@@ -154,6 +155,26 @@ describe("melody input", () => {
     expect(section.querySelector("textarea")).toBeNull();
     expect(midiFile(section)).toBeUndefined();
     expect(section.querySelector("select")).toBeInstanceOf(HTMLSelectElement);
+    expect(section.querySelector("input[aria-label='上載自己嘅 MIDI']")).toBeNull();
+  });
+
+  it("keeps the method-menu MIDI upload as an editable 0243 line", async () => {
+    const node = await mount();
+    openNewSong(node);
+    chooseMelody(melody(node), "MIDI");
+    const input = midiFile(melody(node));
+    if (!input) throw new Error("missing midi file");
+    const bytes = twinkleMidi();
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    const file = new File([copy], "mine.mid", { type: "audio/midi" });
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const codes = [...node.querySelectorAll<HTMLSelectElement>(".syllable select.code")].map((select) => select.value);
+    expect(codes.join("")).toBe("0044334");
+    expect(melody(node).querySelector("input[aria-label='上載自己嘅 MIDI']")).toBeNull();
   });
 
   it("keeps typed notation and the note count when the method changes", async () => {

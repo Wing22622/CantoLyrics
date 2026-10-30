@@ -710,7 +710,7 @@ export function App() {
               載入《世界真細小》例句
             </button>
           </div>
-          <p className="hint">打歌名，可加歌手。旋律會轉成聲調碼，可以再改。呢度唔搵歌詞。</p>
+          <p className="hint">打歌名，可加歌手。旋律會轉成聲調碼，可以再改。呢度唔搵歌詞。搵唔到可以上載或者貼上自己嘅 MIDI。</p>
           <MelodyLookup onFound={onFoundMelodyInEditor} />
           {melodyCredit ? (
             <p className="hint melody-credit">
