@@ -2,7 +2,8 @@
  * Song title → melody (MIDI notes). Not lyrics.
  *
  * 《小星星》 / Twinkle Twinkle / Ah! vous dirai-je, maman comes from the
- * bundled public-domain MIDI in `melody-catalog.ts`. Any other title is
+ * bundled public-domain MIDI in `melody-catalog.ts` (opening seven notes).
+ * Any other title is
  * looked up on Wikimedia Commons, and only a free-licensed MIDI file
  * (public domain, CC0, CC BY, CC BY-SA) is kept.
  *
