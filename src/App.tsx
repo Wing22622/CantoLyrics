@@ -5,6 +5,7 @@ import { framesFromSamples, melodyFromFrames } from "./audio-melody";
 import { CreateSongPrompt, LibraryView } from "./components/LibraryView";
 import { LyricDigitsPanel, type LyricSeed } from "./components/LyricDigits";
 import { LyricLookup } from "./components/LyricLookup";
+import { MelodyLookup } from "./components/MelodyLookup";
 import { SuggestPanel } from "./components/SuggestPanel";
 import { SlotRow, type Slot } from "./components/SlotRow";
 import { EXAMPLE_JIANPU, EXAMPLE_LYRICS, EXAMPLE_TITLE } from "./example";
@@ -12,7 +13,8 @@ import { exportLyrics } from "./export-lyrics";
 import { importedLineAfterChange, slotChangeFor, type SlotWrite } from "./import-line";
 import { parseJianpu } from "./jianpu";
 import { loadLexicon, type Lexicon } from "./lexicon";
-import { midiNoteName, parseMidi, type MidiTrack } from "./midi";
+import { parseMidi, type MidiTrack } from "./midi";
+import { sungNotes, type ResolvedMelody } from "./melody-search";
 import { inferLyricLang, segmentLyric } from "./syllables";
 import { clearOverrides, effectiveCode, slotsForTrackChoice, slotsFromNotes, withCode, type IncomingNote } from "./slots";
 import type { FoundLyrics } from "./lyrics-fetch";
@@ -42,13 +44,7 @@ function fromJianpu(text: string): { notes: IncomingNote[]; warnings: string[]; 
 }
 
 function fromTrack(track: MidiTrack): IncomingNote[] {
-  return track.notes.map((note) => ({
-    rest: false,
-    pitch: note.pitch,
-    beats: note.beats,
-    label: midiNoteName(note.pitch),
-    bar: note.bar,
-  }));
+  return sungNotes(track);
 }
 
 function emptyRun(slots: Slot[], selection: number[]): number[] | null {
@@ -130,6 +126,8 @@ export function App() {
   const [storageError, setStorageError] = useState("");
   const [creating, setCreating] = useState(false);
   const [lyricSeed, setLyricSeed] = useState<LyricSeed | null>(null);
+  const [melodyCredit, setMelodyCredit] = useState("");
+  const [melodyCreditUrl, setMelodyCreditUrl] = useState("");
   const anchor = useRef(0);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const lineBeforeImport = useRef<Slot[] | null>(null);
@@ -223,8 +221,50 @@ export function App() {
     setSelection([]);
     setWarnings([]);
     setNote("");
+    setMelodyCredit("");
+    setMelodyCreditUrl("");
     showLyricDigits(song.sourceLyrics);
     setView("editor");
+  }
+
+  function revealMelody(found: ResolvedMelody) {
+    setTracks(found.tracks);
+    setTrackIndex(found.trackIndex);
+    setMode("midi");
+    setSurface({ kind: "midi" });
+    setMelodyCredit(found.source);
+    setMelodyCreditUrl(found.sourceUrl);
+    setWarnings(found.warnings);
+  }
+
+  /** Title search stops at MIDI notes. 0243 is `slotsForTrackChoice`, the same import a recording uses. */
+  function onFoundMelodyFromLibrary(found: ResolvedMelody) {
+    const track = found.tracks[found.trackIndex];
+    if (!track) return;
+    const created = { ...blankSong(found.title), slots: slotsForTrackChoice(fromTrack(track), [], null) };
+    try {
+      setSaved(saveSong(created));
+      setStorageError("");
+    } catch (error) {
+      setStorageError(storageMessage(error));
+      return;
+    }
+    openSong(created);
+    revealMelody(found);
+  }
+
+  function onFoundMelodyInEditor(found: ResolvedMelody) {
+    const track = found.tracks[found.trackIndex];
+    if (!track) return;
+    setTitle((current) => {
+      const trimmed = current.trim();
+      if (trimmed && trimmed !== "未命名") return current;
+      const next = found.title.trim();
+      return next || trimmed || "未命名";
+    });
+    revealMelody(found);
+    applySlots("import", slotsForTrackChoice(fromTrack(track), slotsRef.current, null), slotsRef.current);
+    setSelection([]);
   }
 
   function showLyricDigits(text: string) {
@@ -303,6 +343,8 @@ export function App() {
 
   function onJianpu(text: string) {
     setJianpu(text);
+    setMelodyCredit("");
+    setMelodyCreditUrl("");
     setMode("jianpu");
     const parsed = fromJianpu(text);
     setTonic(parsed.tonic);
@@ -322,6 +364,8 @@ export function App() {
     setTitle(EXAMPLE_TITLE);
     setSource(EXAMPLE_LYRICS);
     setJianpu(EXAMPLE_JIANPU);
+    setMelodyCredit("");
+    setMelodyCreditUrl("");
     setMode("jianpu");
     setSurface({ kind: "jianpu" });
     const parsed = fromJianpu(EXAMPLE_JIANPU);
@@ -340,6 +384,8 @@ export function App() {
       setWarnings(parsed.warnings);
       setTracks(parsed.tracks);
       setTrackIndex(0);
+      setMelodyCredit("");
+      setMelodyCreditUrl("");
       if (parsed.tracks.length === 0) {
         setMode("jianpu");
         applySlots("edit", []);
@@ -356,6 +402,8 @@ export function App() {
 
   async function onAudioFile(file: File | null) {
     if (!file) return;
+    setMelodyCredit("");
+    setMelodyCreditUrl("");
     try {
       const decoded = await decodeToMono(await file.arrayBuffer(), AUDIO_RATE);
       const samples = clipSamples(decoded, AUDIO_RATE);
@@ -609,6 +657,7 @@ export function App() {
           onRename={onRename}
           onDelete={onDelete}
           onFoundLyrics={onFoundFromLibrary}
+          onFoundMelody={onFoundMelodyFromLibrary}
         />
       </div>
     );
@@ -661,6 +710,21 @@ export function App() {
               載入《世界真細小》例句
             </button>
           </div>
+          <p className="hint">打歌名，可加歌手。旋律會轉成聲調碼，可以再改。呢度唔搵歌詞。</p>
+          <MelodyLookup onFound={onFoundMelodyInEditor} />
+          {melodyCredit ? (
+            <p className="hint melody-credit">
+              {melodyCredit}
+              {melodyCreditUrl ? (
+                <>
+                  {" "}
+                  <a href={melodyCreditUrl} target="_blank" rel="noreferrer">
+                    來源
+                  </a>
+                </>
+              ) : null}
+            </p>
+          ) : null}
           <label className="block">
             輸入方法
             <select
@@ -725,10 +789,10 @@ export function App() {
             </button>
           </div>
           <p className="hint">
-            一行歌詞，每個音一個字。撳個聲調碼可以改；改過會標「改」，再改簡譜都唔會覆寫。重新載入例句、上載 MIDI、上載錄音，或者撳「還原聲調碼」先至用返計算出嚟嘅碼。撳住拖或者按住 Shift 可以連選空格。
+            一行歌詞，每個音一個字。撳個聲調碼可以改；改過會標「改」，再改簡譜都唔會覆寫。重新載入例句、用歌名搵旋律、上載 MIDI、上載錄音，或者撳「還原聲調碼」先至用返計算出嚟嘅碼。撳住拖或者按住 Shift 可以連選空格。
           </p>
           {slots.length === 0 ? (
-            <p className="hint">未有旋律。貼上簡譜、上載 MIDI 或者上載錄音之後，呢度會出一行歌詞。</p>
+            <p className="hint">未有旋律。用歌名搵旋律、貼上簡譜、上載 MIDI 或者上載錄音之後，呢度會出一行歌詞。</p>
           ) : (
             <SlotRow
               slots={slots}

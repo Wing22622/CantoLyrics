@@ -47,6 +47,7 @@ describe("library create", () => {
           onRename: () => {},
           onDelete: () => {},
           onFoundLyrics: () => {},
+          onFoundMelody: () => {},
         }),
       );
     });
@@ -75,8 +76,10 @@ describe("library create", () => {
     const onCreate = vi.fn();
     const node = render([], onCreate);
     expect(node.querySelector("button.text-link")).toBeNull();
+    expect(node.textContent).toContain("用歌名搵旋律");
     expect(node.textContent).toContain("上網搵歌詞");
-    expect(node.querySelector("a")?.getAttribute("href")).toBe("https://lrclib.net/");
+    expect(node.querySelector("a[href='https://commons.wikimedia.org/']")).not.toBeNull();
+    expect(node.querySelector("a[href='https://lrclib.net/']")).not.toBeNull();
     click(node, "開新歌");
     expect(onCreate).toHaveBeenCalledTimes(1);
     expect(onCreate).toHaveBeenCalledWith();
