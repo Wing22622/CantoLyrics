@@ -115,7 +115,7 @@ export function MelodyLookup({
         <a href="https://commons.wikimedia.org/" target="_blank" rel="noreferrer">
           Wikimedia Commons
         </a>{" "}
-        嘅免費 MIDI，或者內置公有領域《小星星》。唔係歌詞。
+        嘅免費 MIDI，或者內置公有領域《小星星》首句七音。唔係歌詞。
       </p>
     </form>
   );

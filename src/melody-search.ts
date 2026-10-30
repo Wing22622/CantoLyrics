@@ -152,7 +152,7 @@ export async function resolveMelody(hit: MelodyHit, fetchImpl: typeof fetch = fe
 }
 
 function bundleSource(): string {
-  return "旋律來自內置公有領域曲《小星星》（Ah! vous dirai-je, maman）。呢段 MIDI 寫喺程式入面，唔係由網頁抓，亦唔係歌詞。";
+  return "旋律來自內置公有領域曲《小星星》首句七音（Ah! vous dirai-je, maman）。呢段 MIDI 寫喺程式入面，唔係成首歌，亦唔係歌詞。";
 }
 
 function commonsSource(ref: Extract<MelodySource, { kind: "commons" }>): string {

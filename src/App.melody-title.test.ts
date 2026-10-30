@@ -25,7 +25,8 @@ async function expectedTwinkle() {
   const notes = sungNotes(resolved.melody.tracks[resolved.melody.trackIndex]);
   const slots = slotsForTrackChoice(notes, [], null);
   const mapped = slots.map((slot) => slot.mapped);
-  expect(mapped).toEqual(mapMelody(notes.map((note) => ({ pitch: note.pitch }))));
+  expect(mapped.join("")).toBe("0044334");
+  expect(mapped.join("")).toBe(mapMelody(notes.map((note) => ({ pitch: note.pitch }))).join(""));
   return { notes, mapped };
 }
 
@@ -117,7 +118,8 @@ describe("melody from a song title", () => {
     expect(sourceLyrics(node)).toBe("");
     expect(node.querySelector(".lyric-digits")).toBeNull();
     expect(codes(node)).toEqual(mapped);
-    expect([...node.querySelectorAll(".pitch")].slice(0, 7).map((item) => item.textContent)).toEqual([
+    expect(codes(node).join("")).toBe("0044334");
+    expect([...node.querySelectorAll(".pitch")].map((item) => item.textContent)).toEqual([
       "C4",
       "C4",
       "G4",

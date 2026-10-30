@@ -77,19 +77,30 @@ describe("bundled 小星星", () => {
 
     const notes = sungNotes(track);
     const slots = slotsForTrackChoice(notes, [], null);
-    expect(slots.map((slot) => slot.mapped)).toEqual(mapMelody(notes.map((note) => ({ pitch: note.pitch }))));
+    const digits = slots.map((slot) => slot.mapped).join("");
+    expect(digits).toBe("0044334");
+    expect(digits).toBe(mapMelody(notes.map((note) => ({ pitch: note.pitch }))).join(""));
+    expect(notes).toHaveLength(7);
     expect(slots.every((slot) => slot.override == null)).toBe(true);
     expect(parseMidi(twinkleMidi()).tracks[0].notes.map((note) => note.pitch)).toEqual(
       twinkleNotes().map((note) => note.pitch),
     );
   });
 
-  it("matches the English and French names of the same tune", async () => {
+  it("imports exactly 0044334 for the English and French names", async () => {
     for (const title of ["Twinkle Twinkle Little Star", "Ah! vous dirai-je, maman", "一閃一閃亮晶晶"]) {
-      const found = await searchMelody({ trackName: title, artistName: "" }, vi.fn());
+      const fetchImpl = vi.fn();
+      const found = await searchMelody({ trackName: title, artistName: "" }, fetchImpl);
+      expect(fetchImpl).not.toHaveBeenCalled();
       expect(found.ok).toBe(true);
       if (!found.ok) continue;
       expect(found.hits[0].ref).toEqual({ kind: "bundle", id: "twinkle" });
+      const resolved = await resolveMelody(found.hits[0], fetchImpl);
+      expect(fetchImpl).not.toHaveBeenCalled();
+      expect(resolved.ok).toBe(true);
+      if (!resolved.ok) continue;
+      const notes = sungNotes(resolved.melody.tracks[resolved.melody.trackIndex]);
+      expect(slotsForTrackChoice(notes, [], null).map((slot) => slot.mapped).join("")).toBe("0044334");
     }
   });
 });

@@ -3,21 +3,14 @@
  *
  * 《小星星》 is the French folk tune Ah! vous dirai-je, maman (1761),
  * also known as Twinkle, Twinkle, Little Star. The melody is public domain.
- * These bytes are written here from that tune. Nothing is downloaded from a
- * sheet-music or MIDI site.
+ * These bytes are written here. Nothing is downloaded from a sheet-music site.
  *
- * Rhythm is the usual 4/4 reading: each phrase is six quarter notes and a
- * half note, in C, starting on C4.
+ * Only the opening half-stanza: seven notes, C4 C4 G4 G4 A4 A4 G4
+ * (six quarters and a half note). Not the other five phrases of the tune.
  */
 
-const PHRASES: readonly (readonly number[])[] = [
-  [60, 60, 67, 67, 69, 69, 67],
-  [65, 65, 64, 64, 62, 62, 60],
-  [67, 67, 65, 65, 64, 64, 62],
-  [67, 67, 65, 65, 64, 64, 62],
-  [60, 60, 67, 67, 69, 69, 67],
-  [65, 65, 64, 64, 62, 62, 60],
-];
+/** C4 C4 G4 G4 A4 A4 G4. */
+const OPENING: readonly number[] = [60, 60, 67, 67, 69, 69, 67];
 
 export const TWINKLE_SOURCE_URL = "https://en.wikipedia.org/wiki/Twinkle,_Twinkle,_Little_Star";
 
@@ -27,9 +20,7 @@ export interface CatalogNote {
 }
 
 export function twinkleNotes(): CatalogNote[] {
-  return PHRASES.flatMap((phrase) =>
-    phrase.map((pitch, index) => ({ pitch, beats: index === phrase.length - 1 ? 2 : 1 })),
-  );
+  return OPENING.map((pitch, index) => ({ pitch, beats: index === OPENING.length - 1 ? 2 : 1 }));
 }
 
 const PPQ = 480;
