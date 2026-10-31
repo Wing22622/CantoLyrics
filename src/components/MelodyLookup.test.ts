@@ -6,8 +6,11 @@ import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { twinkleMidi } from "../melody-catalog";
 import { MelodyLookup } from "./MelodyLookup";
+import { sungNotes } from "../melody-search";
 import type { MelodyHit, MelodyQuery, MelodyResolveOutcome, MelodySearchOutcome, ResolvedMelody } from "../melody-search";
+import { slotsForTrackChoice } from "../slots";
 
 const melody: ResolvedMelody = {
   title: "小星星",
@@ -87,8 +90,11 @@ describe("MelodyLookup", () => {
     expect(button?.textContent).toBe("用歌名搵旋律");
     expect(button).toHaveProperty("disabled", true);
     expect(node.querySelector("a")?.getAttribute("href")).toBe("https://commons.wikimedia.org/");
+    expect(node.querySelector("a[href='https://archive.org/']")).not.toBeNull();
     expect(node.textContent).toContain("免費 MIDI");
     expect(node.textContent).toContain("唔係歌詞");
+    expect(node.textContent).toContain("上載或貼上自己嘅 MIDI");
+    expect(node.querySelector("input[aria-label='上載自己嘅 MIDI']")).toBeNull();
     expect(node.textContent).not.toContain("LRCLIB");
   });
 
@@ -102,6 +108,60 @@ describe("MelodyLookup", () => {
     expect(search).toHaveBeenCalledWith({ trackName: "冇呢首", artistName: "某人" });
     expect(onFound).not.toHaveBeenCalled();
     expect(node.textContent).toContain("搵唔到免費授權嘅旋律");
+    expect(node.textContent).toContain("上載、貼上自己嘅 MIDI");
+    expect(node.querySelector("input[aria-label='上載自己嘅 MIDI']")).not.toBeNull();
+    expect(node.querySelector("textarea[aria-label='貼上 MIDI']")).not.toBeNull();
+  });
+
+  it("imports pasted MIDI into the same 0243 path after a miss", async () => {
+    const search = vi.fn(async (): Promise<MelodySearchOutcome> => ({ ok: false, failure: { status: "not-found" } }));
+    const onFound = vi.fn();
+    const node = render(search, onFound);
+    type(node, "旋律歌名", "冇呢首");
+    await submit(node);
+    let binary = "";
+    for (const byte of twinkleMidi()) binary += String.fromCharCode(byte);
+    const box = node.querySelector<HTMLTextAreaElement>("textarea[aria-label='貼上 MIDI']");
+    if (!box) throw new Error("missing paste box");
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(box, `data:audio/midi;base64,${btoa(binary)}`);
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const button = [...node.querySelectorAll("button")].find((item) => item.textContent === "匯入貼上嘅 MIDI");
+    if (!button) throw new Error("missing import");
+    act(() => {
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onFound).toHaveBeenCalledTimes(1);
+    const found = onFound.mock.calls[0][0] as ResolvedMelody;
+    const notes = sungNotes(found.tracks[found.trackIndex]);
+    expect(slotsForTrackChoice(notes, [], null).map((slot) => slot.mapped).join("")).toBe("0044334");
+    expect(found.title).toBe("冇呢首");
+    expect(found.source).toContain("上載或者貼上");
+  });
+
+  it("imports an uploaded MIDI file after a miss", async () => {
+    const search = vi.fn(async (): Promise<MelodySearchOutcome> => ({ ok: false, failure: { status: "not-found" } }));
+    const onFound = vi.fn();
+    const node = render(search, onFound);
+    type(node, "旋律歌名", "自備");
+    await submit(node);
+    const input = node.querySelector<HTMLInputElement>("input[aria-label='上載自己嘅 MIDI']");
+    if (!input) throw new Error("missing upload");
+    const bytes = twinkleMidi();
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    const file = new File([copy], "自備.mid", { type: "audio/midi" });
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onFound).toHaveBeenCalledTimes(1);
+    const found = onFound.mock.calls[0][0] as ResolvedMelody;
+    const notes = sungNotes(found.tracks[found.trackIndex]);
+    expect(slotsForTrackChoice(notes, [], null).map((slot) => slot.mapped).join("")).toBe("0044334");
+    expect(found.title).toBe("自備");
   });
 
   it("resolves the only hit into melody notes", async () => {

@@ -10,6 +10,7 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { loadLexicon } from "./lexicon";
+import { twinkleMidi } from "./melody-catalog";
 import { resolveMelody, searchMelody, sungNotes } from "./melody-search";
 import { slotsForTrackChoice } from "./slots";
 import { SONG_LIBRARY_KEY, type StoredSong } from "./storage";
@@ -149,7 +150,35 @@ describe("melody from a song title", () => {
     await submitMelody(node);
     expect(node.querySelector("h1")?.textContent).toBe("歌曲庫");
     expect(node.textContent).toContain("搵唔到免費授權嘅旋律");
+    expect(node.textContent).toContain("上載自己嘅 MIDI");
     expect(localStorage.getItem(SONG_LIBRARY_KEY)).toBeNull();
+  });
+
+  it("imports a pasted MIDI after a miss and opens editable 0243", async () => {
+    installFetch(() => new Response(JSON.stringify({ batchcomplete: "" }), { status: 200 }));
+    const node = await mount();
+    type(node, "旋律歌名", "冇呢段旋律");
+    await submitMelody(node);
+    let binary = "";
+    for (const byte of twinkleMidi()) binary += String.fromCharCode(byte);
+    const box = node.querySelector<HTMLTextAreaElement>("textarea[aria-label='貼上 MIDI']");
+    if (!box) throw new Error("missing paste box");
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(box, `data:audio/midi;base64,${btoa(binary)}`);
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const button = [...node.querySelectorAll("button")].find((item) => item.textContent === "匯入貼上嘅 MIDI");
+    if (!button) throw new Error("missing import");
+    act(() => {
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(node.querySelector("h1")?.textContent).toBe("粵語填詞");
+    expect(node.querySelector<HTMLInputElement>(".song-actions input")?.value).toBe("冇呢段旋律");
+    expect(codes(node).join("")).toBe("0044334");
+    expect(sourceLyrics(node)).toBe("");
+    const melody = [...node.querySelectorAll("section")].find((item) => item.querySelector("h2")?.textContent === "旋律");
+    expect(melody?.querySelector("select")?.selectedOptions[0]?.text).toBe("MIDI");
   });
 
   it("shows a network error and does not create a song", async () => {

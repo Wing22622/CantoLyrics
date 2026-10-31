@@ -2,10 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { encodeMonophonicMidi, twinkleMidi, twinkleNotes } from "./melody-catalog";
 import { parseMidi } from "./midi";
 import {
+  archiveSearchUrl,
   chooseMelodyTrack,
   commonsSearchUrl,
   isFreeMelodyLicense,
+  melodyFromOwnMidi,
   melodySearchMessage,
+  midiBytesFromText,
   resolveMelody,
   searchMelody,
   sungNotes,
@@ -236,9 +239,165 @@ describe("melody track choice and licenses", () => {
     expect(isFreeMelodyLicense("CC0")).toBe(true);
     expect(isFreeMelodyLicense("CC BY 4.0")).toBe(true);
     expect(isFreeMelodyLicense("CC BY-SA 3.0")).toBe(true);
+    expect(isFreeMelodyLicense("https://creativecommons.org/licenses/by/4.0/")).toBe(true);
+    expect(isFreeMelodyLicense("https://creativecommons.org/licenses/by-sa/4.0/")).toBe(true);
+    expect(isFreeMelodyLicense("http://creativecommons.org/publicdomain/mark/1.0/")).toBe(true);
+    expect(isFreeMelodyLicense("https://creativecommons.org/publicdomain/zero/1.0/")).toBe(true);
     expect(isFreeMelodyLicense("CC BY-NC-SA 4.0")).toBe(false);
     expect(isFreeMelodyLicense("CC BY-ND 4.0")).toBe(false);
+    expect(isFreeMelodyLicense("https://creativecommons.org/licenses/by-nc/4.0/")).toBe(false);
+    expect(isFreeMelodyLicense("https://creativecommons.org/licenses/by-nd/4.0/")).toBe(false);
     expect(isFreeMelodyLicense("")).toBe(false);
+    expect(isFreeMelodyLicense("None")).toBe(false);
     expect(isFreeMelodyLicense("All rights reserved")).toBe(false);
+  });
+});
+
+const ARCHIVE_ID = "chordzy-sheet-music-ludwig-van-beethoven-fur-elise-piano";
+const ARCHIVE_FILE = "ludwig-van-beethoven_fur-elise_piano.midi";
+const ARCHIVE_LICENSE = "https://creativecommons.org/licenses/by/4.0/";
+
+function archiveSearchBody() {
+  return {
+    response: {
+      docs: [
+        { identifier: "paid-tune", title: "Paid", licenseurl: "https://creativecommons.org/licenses/by-nc/4.0/" },
+        { identifier: "unlicensed-tune", title: "No license" },
+        { identifier: "../evil", title: "Elsewhere", licenseurl: "https://creativecommons.org/publicdomain/mark/1.0/" },
+        { identifier: ARCHIVE_ID, title: "Fur Elise (Piano)", licenseurl: ARCHIVE_LICENSE, rights: "None" },
+      ],
+    },
+  };
+}
+
+function archiveMetadata() {
+  return {
+    metadata: { licenseurl: ARCHIVE_LICENSE, rights: "None", title: "Fur Elise (Piano)" },
+    files: [
+      { name: "score.pdf", format: "PDF", size: "20" },
+      { name: "../secret.mid", format: "MIDI", size: "100", source: "original" },
+      { name: "big.mid", format: "MIDI", size: "2000000", source: "original" },
+      { name: ARCHIVE_FILE, format: "MIDI", size: "8282", source: "original" },
+    ],
+  };
+}
+
+describe("Internet Archive MIDI", () => {
+  it("keeps a CC BY item when Commons has no free MIDI", async () => {
+    const urls: string[] = [];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.includes("commons.wikimedia.org")) {
+        return new Response(JSON.stringify(commonsBody(null)), { status: 200 });
+      }
+      return new Response(JSON.stringify(archiveSearchBody()), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const found = await searchMelody({ trackName: "Fur Elise", artistName: "Beethoven" }, fetchImpl);
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.hits).toEqual([
+      {
+        id: `archive:${ARCHIVE_ID}`,
+        label: "Fur Elise (Piano)",
+        detail: "CC BY",
+        title: "Fur Elise",
+        sourceUrl: `https://archive.org/details/${ARCHIVE_ID}`,
+        ref: {
+          kind: "archive",
+          identifier: ARCHIVE_ID,
+          pageUrl: `https://archive.org/details/${ARCHIVE_ID}`,
+          license: ARCHIVE_LICENSE,
+          itemTitle: "Fur Elise (Piano)",
+        },
+      },
+    ]);
+    expect(urls).toHaveLength(2);
+    expect(urls[0]).toBe(commonsSearchUrl({ trackName: "Fur Elise", artistName: "Beethoven" }));
+    expect(urls[1]).toBe(archiveSearchUrl({ trackName: "Fur Elise", artistName: "Beethoven" }));
+    expect(urls[1]).toContain("archive.org");
+    expect(urls[1]).not.toContain("Beethoven");
+  });
+
+  it("downloads the allowlisted cors file and maps it like a recording", async () => {
+    const urls: string[] = [];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.includes("/metadata/")) {
+        return new Response(JSON.stringify(archiveMetadata()), { status: 200 });
+      }
+      return midiResponse(twinkleMidi());
+    });
+    const found = await searchMelody({ trackName: "Fur Elise", artistName: "" }, async (input) => {
+      const url = String(input);
+      if (url.includes("commons.wikimedia.org")) {
+        return new Response(JSON.stringify(commonsBody(null)), { status: 200 });
+      }
+      return new Response(JSON.stringify(archiveSearchBody()), { status: 200 });
+    });
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    const resolved = await resolveMelody(found.hits[0], fetchImpl);
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(urls[0]).toBe(`https://archive.org/metadata/${ARCHIVE_ID}`);
+    expect(urls[1]).toBe(`https://archive.org/cors/${ARCHIVE_ID}/${ARCHIVE_FILE}`);
+    expect(urls.every((url) => url.startsWith("https://archive.org/"))).toBe(true);
+    const notes = sungNotes(resolved.melody.tracks[resolved.melody.trackIndex]);
+    const slots = slotsForTrackChoice(notes, [], null);
+    expect(slots.map((slot) => slot.mapped).join("")).toBe("0044334");
+    expect(slots.map((slot) => slot.mapped)).toEqual(mapMelody(notes.map((note) => ({ pitch: note.pitch }))));
+    expect(resolved.melody.source).toContain("Internet Archive");
+    expect(resolved.melody.source).toContain("CC BY");
+    expect(resolved.melody.sourceUrl).toBe(`https://archive.org/details/${ARCHIVE_ID}`);
+  });
+
+  it("does not call Archive when Commons already has a free MIDI", async () => {
+    const urls: string[] = [];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+      return new Response(
+        JSON.stringify(commonsBody({ only: commonsPage({ title: "File:Ode_to_Joy.mid", index: 1 }) })),
+        { status: 200 },
+      );
+    });
+    const found = await searchMelody({ trackName: "Ode to Joy", artistName: "" }, fetchImpl);
+    expect(found.ok).toBe(true);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain("commons.wikimedia.org");
+  });
+});
+
+describe("own MIDI bytes", () => {
+  it("maps an uploaded file through the same slots as a recording", () => {
+    const resolved = melodyFromOwnMidi(twinkleMidi(), "我嘅歌");
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    const notes = sungNotes(resolved.melody.tracks[resolved.melody.trackIndex]);
+    expect(slotsForTrackChoice(notes, [], null).map((slot) => slot.mapped).join("")).toBe("0044334");
+    expect(resolved.melody.source).toContain("上載或者貼上");
+    expect(resolved.melody.title).toBe("我嘅歌");
+  });
+
+  it("reads a data URL and rejects text that is not MIDI", () => {
+    let binary = "";
+    for (const byte of twinkleMidi()) binary += String.fromCharCode(byte);
+    const encoded = btoa(binary);
+    const bytes = midiBytesFromText(`data:audio/midi;base64,${encoded}`);
+    expect(bytes).not.toBeNull();
+    if (!bytes) return;
+    const resolved = melodyFromOwnMidi(bytes, "貼上");
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(sungNotes(resolved.melody.tracks[0]).map((note) => note.pitch)).toEqual(
+      twinkleNotes().map((note) => note.pitch),
+    );
+    expect(midiBytesFromText("hello")).toBeNull();
+    expect(midiBytesFromText("data:text/html;base64,AAAA")).toBeNull();
+    expect(melodyFromOwnMidi(new Uint8Array(), "空").ok).toBe(false);
   });
 });
