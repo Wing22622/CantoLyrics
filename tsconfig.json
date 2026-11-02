@@ -16,5 +16,5 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["node"]
   },
-  "include": ["src", "workers/lrclib-proxy/src"]
+  "include": ["src", "workers/lrclib-proxy/src", "workers/youtube-audio/src"]
 }

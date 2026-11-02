@@ -1,8 +1,8 @@
 # CantoLyrics
 
-A small browser app for writing Cantonese lyrics (填詞) against a melody. Paste 簡譜, upload a MIDI file, upload an audio recording, or search a song title for a melody, see a 0243 tone code on every note, type Cantonese characters in one flowing line, and get word suggestions that fit the codes. Any code can be edited by hand.
+A small browser app for writing Cantonese lyrics (填詞) against a melody. Paste 簡譜, upload a MIDI file, upload an audio recording, paste a YouTube link, or search a song title for a melody, see a 0243 tone code on every note, type Cantonese characters in one flowing line, and get word suggestions that fit the codes. Any code can be edited by hand.
 
-M1 is client-only. Vite builds a static site, and GitHub Pages serves that build. Lyric search can go through a Cloudflare Worker you deploy yourself. See [Proxy LRCLIB search](#proxy-lrclib-search). GitHub Actions can publish the build to GitHub Pages after Pages is enabled. See [GitHub Pages](#github-pages).
+M1 is client-only. Vite builds a static site, and GitHub Pages serves that build. Lyric search can go through a Cloudflare Worker you deploy yourself. See [Proxy LRCLIB search](#proxy-lrclib-search). YouTube audio can go through a second Worker. See [YouTube audio](#youtube-audio). GitHub Actions can publish the build to GitHub Pages after Pages is enabled. See [GitHub Pages](#github-pages).
 
 The interface is in Traditional Chinese, written in Cantonese.
 
@@ -24,7 +24,7 @@ npm run dev
 2. Settings → Pages → Build and deployment → Source 選 **GitHub Actions**.
 3. 推上 `main`，或在 Actions 手動跑 **Deploy static content to Pages**。The workflow runs `npm ci` and `npm run build`, then publishes `dist/`.
 
-The build reads the Actions variable `VITE_LRCLIB_PROXY_URL`. Leave it empty until the Worker in the next section has a real URL. An empty value keeps the browser on `https://lrclib.net/api/search`.
+The build reads the Actions variables `VITE_LRCLIB_PROXY_URL` and `VITE_YOUTUBE_AUDIO_PROXY_URL`. Leave each empty until that Worker has a real URL. An empty LRCLIB value keeps the browser on `https://lrclib.net/api/search`. An empty YouTube value leaves the paste box in place and shows「未設定 YouTube 音訊代理。請部署 workers/youtube-audio，再設定 VITE_YOUTUBE_AUDIO_PROXY_URL。」
 
 ## Proxy LRCLIB search
 
@@ -54,6 +54,43 @@ Until that variable is set for the Pages build, the phone error stays. A placeho
 
 The Worker is public. Anyone with the URL can search LRCLIB through it. It is not a general HTTP proxy. LRCLIB rate limits still apply. GitHub Pages stays the host. Melody, 0243, and the lyric form are unchanged.
 
+## YouTube audio
+
+Paste a YouTube, Shorts, or YouTube Music link in the melody panel, next to 輸入方法. The page asks your Worker for audio, then runs the same path as an uploaded recording: decode, keep the first 90 seconds, estimate one pitch at a time, and fill 0243 with `slotsForTrackChoice` / `mapMelody`. This is for personal lyric practice. It does not redistribute the audio, and this repo does not deploy the Worker.
+
+Without `VITE_YOUTUBE_AUDIO_PROXY_URL`, the button stays disabled and the page shows the deploy hint above. No request is sent.
+
+`workers/youtube-audio` is a Cloudflare Worker named `cantolyrics-youtube-audio`. Workers cannot run an yt-dlp binary, and the public Cobalt API is not a free keyless dependency. The Worker instead POSTs YouTube's public ANDROID_VR innertube player (`clientVersion` `1.65.10` in `workers/youtube-audio/src/index.ts`). That client returns a direct `googlevideo.com` audio URL, with no signature cipher and no API key. It prefers itag 140 (AAC in an MP4), which the browser can decode. The Worker then downloads that file itself, because googlevideo does not send CORS headers the page can read. A plain GET of those URLs is often throttled, so the download uses 1 MiB `Range` chunks and stops after 20 seconds.
+
+Limits, so a free Worker does not hang or become an open proxy:
+
+- Only `youtube.com`, `www.youtube.com`, `m.youtube.com`, `music.youtube.com`, `youtu.be`, and `www.youtu.be`. Watch, Shorts, embed, live, and `/v/` links. Any other host is rejected.
+- Stream downloads only from `https://*.googlevideo.com`. Redirects to any other host are dropped.
+- At most 8 MiB, and a video longer than 8 minutes is rejected. Live streams are rejected.
+- CORS allows `https://wing22622.github.io` and `http://localhost` / `http://127.0.0.1` (any port, so local Vite works). Other browser origins get 403.
+
+No API key is required. If YouTube stops returning a direct URL, the page shows an error and you can still upload a recording. The usual fix is to set `ANDROID_VR_VERSION` to yt-dlp's current ANDROID_VR `clientVersion`, and not above `1.65.x`. Later versions return SABR streams with no `url`.
+
+Deploy it with your own Cloudflare account. This repo does not deploy it and does not contain a workers.dev URL.
+
+```bash
+cd workers/youtube-audio
+npx wrangler login
+npx wrangler deploy
+```
+
+Wrangler prints an origin such as `https://cantolyrics-youtube-audio.<account>.workers.dev`. Copy that origin with no path.
+
+Then set the GitHub Actions variable `VITE_YOUTUBE_AUDIO_PROXY_URL` to that origin (Settings → Secrets and variables → Actions → Variables). Run **Deploy static content to Pages** again.
+
+For local dev:
+
+```bash
+VITE_YOUTUBE_AUDIO_PROXY_URL=https://cantolyrics-youtube-audio.<account>.workers.dev npm run dev
+```
+
+The Worker is public. Anyone with the URL can ask it for audio from an allowed YouTube link. It is not a general HTTP proxy. YouTube can block datacenter addresses; a failure stays on this page as an error, and the recording upload still works.
+
 ## Melody
 
 簡譜, major scale, default `1=C` (C4):
@@ -66,6 +103,8 @@ The Worker is public. Anyone with the URL can search LRCLIB through it. It is no
 MIDI: format 0 or 1. If the file has several tracks, pick one. A chord keeps the highest note. A later overlapping note trims the one before it.
 
 Audio (MP3, WAV, and other files the browser can decode): the page resamples to mono and estimates one pitch at a time with YIN. Stable pitches become notes. Rhythm is only a rough grid, a quarter note at 120 BPM snapped to the nearest eighth, and a bar is 4 beats. This is a monophonic guess. Chords, harmony, and drums come out wrong or not at all. A silent or unpitched file shows「呢段錄音搵唔到清楚嘅旋律」and clears the line. A file the browser cannot decode shows「呢個音訊檔讀唔到」and clears the line too. Only the first 90 seconds are analysed.
+
+A YouTube link uses that same import after the Worker returns bytes. It does not search YouTube or change lyric alignment. See [YouTube audio](#youtube-audio).
 
 Song title: in the library or the melody panel, type a title and an optional artist. This looks up a **melody**, not lyrics. 《小星星》, Twinkle Twinkle Little Star, and Ah! vous dirai-je, maman use a public-domain MIDI written in `src/melody-catalog.ts`. That file is only the opening half-stanza, seven notes (C4 C4 G4 G4 A4 A4 G4), which `mapMelody` fills as `0044334`. The bytes are not downloaded, and the other phrases of the tune are not included. Any other title searches [Wikimedia Commons](https://commons.wikimedia.org/) first, and keeps a MIDI file only when the license is public domain, CC0, CC BY, or CC BY-SA. If Commons has no free MIDI, the same title is searched on the [Internet Archive](https://archive.org/) (`advancedsearch.php`, then `metadata`, then `archive.org/cors/…` so the browser can read the file). An Archive item is kept only when `licenseurl` is a public-domain, CC0, CC BY, or CC BY-SA URL, or when that field is empty and `rights` says the same. Unlicensed uploads are dropped. The artist is not required on Archive, because many legal files list an arranger as creator. The file is read with the existing MIDI parser. A track whose name looks like a melody is used; otherwise the track with the most notes is used. The other tracks stay in the MIDI picker.
 
@@ -150,10 +189,10 @@ Export writes a `.txt` file: one line per bar, characters separated by spaces, �
 ## Known limitations
 
 - One scaffold per phrase. No 節點斷開, no alternate fillings, no 同向 slider. 外張 only shows up as a gap cost (0 and 3 can stretch, but they still pay for the semitones). Hand-editing a code is the way to force another filling.
-- Hand edits survive 簡譜 edits when the note's pitch, spelling, and duration are unchanged, and are dropped on a new melody import (MIDI, another MIDI track, audio, or a melody found by song title). A fresh import still lines characters up by sung-note index.
+- Hand edits survive 簡譜 edits when the note's pitch, spelling, and duration are unchanged, and are dropped on a new melody import (MIDI, another MIDI track, audio, YouTube audio, or a melody found by song title). A fresh import still lines characters up by sung-note index.
 - While a MIDI file is open, switching track restores the line from before that file. That backup is dropped in one place, and only when the user edits a character or a code (or another slot edit such as 拖音). Choosing a track, or re-parsing the 簡譜, does not drop it. Changing the title or the big 原詞 box does not either. Loading the example, opening a song, or an empty file does.
 - A MIDI file with no melody track clears the lyric line and shows「檔案入面冇旋律音」.
-- Audio pitch is one note at a time. Polyphony, percussion, noise, and a quiet take will miss notes or warn that no melody was found. Timing is quantised; it is not a transcription.
+- Audio pitch is one note at a time. Polyphony, percussion, noise, and a quiet take will miss notes or warn that no melody was found. Timing is quantised; it is not a transcription. YouTube audio is the same guess, after your own Worker downloads at most eight minutes. This repo does not deploy that Worker. YouTube can refuse the ANDROID_VR client; upload a recording if it does.
 - No 六聲 or 九聲.
 - 變調 is honoured only when the lexicon lists it as its own reading.
 - Rising tones may fit an extra code. That is more permissive than “陰上 = 三 only”.
@@ -162,4 +201,4 @@ Export writes a `.txt` file: one line per bar, characters separated by spaces, �
 - English syllabification is a vowel-group split, not a dictionary. Japanese kanji are one character each, not split into morae. Punctuation is dropped.
 - The lexicon is not exhaustive. Simplified characters are not covered. An unknown character is amber, not a tone error.
 - Alignment “拖音” moves the following source syllables along; it is not a full undo of a melisma.
-- Browser storage only. No account. Lyric search still uses `lrclib.net` from the browser until `VITE_LRCLIB_PROXY_URL` is set. Melody-from-title uses the bundled 《小星星》 opening (seven notes, `0044334`) offline, then `commons.wikimedia.org` plus `upload.wikimedia.org`, then `archive.org` (search, metadata, and `/cors/` download). Both remote sources keep only public domain, CC0, CC BY, and CC BY-SA. Commons or Archive can return a different arrangement from the song you meant. Pop and Cantonese titles often have no free MIDI; upload or paste your own file. Only that seven-note opening is guaranteed without the network.
+- Browser storage only. No account. Lyric search still uses `lrclib.net` from the browser until `VITE_LRCLIB_PROXY_URL` is set. A YouTube link does nothing until `VITE_YOUTUBE_AUDIO_PROXY_URL` points at a Worker you deploy; the page then shows the deploy hint. Melody-from-title uses the bundled 《小星星》 opening (seven notes, `0044334`) offline, then `commons.wikimedia.org` plus `upload.wikimedia.org`, then `archive.org` (search, metadata, and `/cors/` download). Both remote sources keep only public domain, CC0, CC BY, and CC BY-SA. Commons or Archive can return a different arrangement from the song you meant. Pop and Cantonese titles often have no free MIDI; upload or paste your own file. Only that seven-note opening is guaranteed without the network.
