@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { alignLyric, alignmentNote, toggleMelisma } from "./align";
-import { clipSamples, decodeToMono } from "./audio-file";
-import { framesFromSamples, melodyFromFrames } from "./audio-melody";
+import { melodyFromAudioData } from "./audio-import";
 import { CreateSongPrompt, LibraryView } from "./components/LibraryView";
 import { LyricDigitsPanel, type LyricSeed } from "./components/LyricDigits";
 import { LyricLookup } from "./components/LyricLookup";
 import { MelodyLookup } from "./components/MelodyLookup";
+import { YoutubeAudioForm } from "./components/YoutubeAudioForm";
 import { SuggestPanel } from "./components/SuggestPanel";
 import { SlotRow, type Slot } from "./components/SlotRow";
 import { EXAMPLE_JIANPU, EXAMPLE_LYRICS, EXAMPLE_TITLE } from "./example";
@@ -21,8 +21,6 @@ import type { FoundLyrics } from "./lyrics-fetch";
 import { blankSong, deleteSong, listSongs, renameSong, saveSong, type StoredSong } from "./storage";
 import type { Code0243 } from "./tone-0243";
 import type { WordEntry } from "./suggest";
-
-const AUDIO_RATE = 16000;
 
 function toSlots(notes: IncomingNote[], prev: Slot[], keepOverrides: boolean): Slot[] {
   return slotsFromNotes(notes, prev, keepOverrides);
@@ -405,31 +403,49 @@ export function App() {
     setMelodyCredit("");
     setMelodyCreditUrl("");
     try {
-      const decoded = await decodeToMono(await file.arrayBuffer(), AUDIO_RATE);
-      const samples = clipSamples(decoded, AUDIO_RATE);
-      const notes = melodyFromFrames(framesFromSamples(samples, AUDIO_RATE));
-      const clipped = samples.length < decoded.length;
-      if (notes.length === 0) {
-        setTracks([]);
-        setMode("jianpu");
-        applySlots("edit", []);
-        setSelection([]);
-        setWarnings(["呢段錄音搵唔到清楚嘅旋律"]);
-        return;
-      }
-      setTracks([]);
-      setTrackIndex(0);
-      setMode("audio");
-      applySlots("import", slotsForTrackChoice(notes, slotsRef.current, null), slotsRef.current);
-      setSelection([]);
-      setWarnings(clipped ? ["只係分析咗頭 90 秒。"] : []);
+      await applyAudioData(await file.arrayBuffer());
     } catch {
+      rejectAudio();
+    }
+  }
+
+  async function onYoutubeAudio(data: ArrayBuffer) {
+    setMelodyCredit("");
+    setMelodyCreditUrl("");
+    try {
+      const ok = await applyAudioData(data);
+      if (ok) setSurface({ kind: "audio" });
+    } catch {
+      rejectAudio();
+    }
+  }
+
+  /** Same decode → melody → 0243 import the recording upload uses. */
+  async function applyAudioData(data: ArrayBuffer): Promise<boolean> {
+    const { notes, clipped } = await melodyFromAudioData(data);
+    if (notes.length === 0) {
       setTracks([]);
       setMode("jianpu");
       applySlots("edit", []);
       setSelection([]);
-      setWarnings(["呢個音訊檔讀唔到"]);
+      setWarnings(["呢段錄音搵唔到清楚嘅旋律"]);
+      return false;
     }
+    setTracks([]);
+    setTrackIndex(0);
+    setMode("audio");
+    applySlots("import", slotsForTrackChoice(notes, slotsRef.current, null), slotsRef.current);
+    setSelection([]);
+    setWarnings(clipped ? ["只係分析咗頭 90 秒。"] : []);
+    return true;
+  }
+
+  function rejectAudio() {
+    setTracks([]);
+    setMode("jianpu");
+    applySlots("edit", []);
+    setSelection([]);
+    setWarnings(["呢個音訊檔讀唔到"]);
   }
 
   function chooseTrack(index: number) {
@@ -631,7 +647,7 @@ export function App() {
               </label>
             </div>
             <p className="hint">
-              錄音可以係 MP3、WAV 或者其他常見音訊。抽出旋律會清走手改聲調碼，已打嘅字會跟住音序留低。要清楚嘅單旋律，和弦同鼓會唔準。
+              錄音可以係 MP3、WAV 或者其他常見音訊。上面貼 YouTube 連結都會行同一條路。抽出旋律會清走手改聲調碼，已打嘅字會跟住音序留低。要清楚嘅單旋律，和弦同鼓會唔準。
             </p>
           </>
         );
@@ -725,6 +741,7 @@ export function App() {
               ) : null}
             </p>
           ) : null}
+          <YoutubeAudioForm onAudio={onYoutubeAudio} />
           <label className="block">
             輸入方法
             <select
@@ -789,10 +806,10 @@ export function App() {
             </button>
           </div>
           <p className="hint">
-            一行歌詞，每個音一個字。撳個聲調碼可以改；改過會標「改」，再改簡譜都唔會覆寫。重新載入例句、用歌名搵旋律、上載 MIDI、上載錄音，或者撳「還原聲調碼」先至用返計算出嚟嘅碼。撳住拖或者按住 Shift 可以連選空格。
+            一行歌詞，每個音一個字。撳個聲調碼可以改；改過會標「改」，再改簡譜都唔會覆寫。重新載入例句、用歌名搵旋律、上載 MIDI、上載錄音、由 YouTube 抽出旋律，或者撳「還原聲調碼」先至用返計算出嚟嘅碼。撳住拖或者按住 Shift 可以連選空格。
           </p>
           {slots.length === 0 ? (
-            <p className="hint">未有旋律。用歌名搵旋律、貼上簡譜、上載 MIDI 或者上載錄音之後，呢度會出一行歌詞。</p>
+            <p className="hint">未有旋律。用歌名搵旋律、貼上簡譜、上載 MIDI、上載錄音或者貼上 YouTube 連結之後，呢度會出一行歌詞。</p>
           ) : (
             <SlotRow
               slots={slots}

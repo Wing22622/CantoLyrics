@@ -493,7 +493,8 @@ button.text-link {
 }
 
 .lyric-lookup,
-.melody-lookup {
+.melody-lookup,
+.youtube-audio {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem 0.6rem;
@@ -502,10 +503,12 @@ button.text-link {
 }
 
 .lyric-lookup label,
-.melody-lookup label { flex: 1 1 9rem; }
+.melody-lookup label,
+.youtube-audio label { flex: 1 1 9rem; }
 
 .lyric-lookup input,
-.melody-lookup input { width: 100%; }
+.melody-lookup input,
+.youtube-audio input { width: 100%; }
 
 .melody-credit a { color: inherit; }
 
@@ -595,6 +598,7 @@ button.danger { background: #9f1239; }
   .create-song input,
   .lyric-lookup input,
   .melody-lookup input,
+  .youtube-audio input,
   .rename-row input { width: 100%; }
   .song-actions > button:not(.text-link) { width: 100%; }
   .panel { padding: 0.75rem 0.7rem 0.9rem; }
@@ -602,6 +606,7 @@ button.danger { background: #9f1239; }
   .create-song,
   .lyric-lookup,
   .melody-lookup,
+  .youtube-audio,
   .rename-row,
   .confirm,
   .card-actions { flex-direction: column; align-items: stretch; }
@@ -609,6 +614,7 @@ button.danger { background: #9f1239; }
   .legend { gap: 0.25rem 0.55rem; }
   .song-card, .preview, .panel h2 { overflow-wrap: anywhere; }
   .library .lyric-lookup label,
-  .library .melody-lookup label { flex: 0 1 auto; }
+  .library .melody-lookup label,
+  .youtube-audio label { flex: 0 1 auto; }
   .library > .panel { margin-top: 0; }
 }
